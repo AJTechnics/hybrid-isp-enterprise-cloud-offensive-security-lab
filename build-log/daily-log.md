@@ -30,3 +30,26 @@ Use one entry per session. Copy the template below for each new entry.
 ## Entries
 
 <!-- Add new log entries below, newest first -->
+
+## 2026-04-01
+
+**Phase:** Phase 0 — Foundation
+**Time spent:** ~30min
+
+### What I worked on
+Tested the lab-update script
+
+### What I changed
+Fixed script bugs
+
+### What worked
+Script runs correctly
+
+### What failed
+n/a
+
+### What I learned
+Always test scripts before committing
+
+### Next step
+Run full option 4 next session
