@@ -19,13 +19,13 @@ This phase is purely organizational. No infrastructure is deployed.
 
 ## Tasks
 
-- [ ] Upgrade ThinkCentre to 32 GB RAM
-- [ ] Confirm SSD capacity
-- [ ] Install Proxmox
-- [ ] Create GitHub repository
-- [ ] Create Obsidian project vault/folder structure
-- [ ] Add README.md
-- [ ] Add phase files
+- [x] Upgrade ThinkCentre to 16 GB RAM
+- [x] Confirm SSD capacity
+- [x] Install Proxmox
+- [x] Create GitHub repository
+- [x] Create Obsidian project vault/folder structure
+- [x] Add README.md
+- [x] Add phase files
 - [ ] Add VM inventory file
 - [ ] Add IP plan file
 - [ ] Decide router platform: VyOS or FRRouting-based Linux routers
