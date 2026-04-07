@@ -36,7 +36,15 @@ Track all significant changes to the lab here. Newest entries first.
 - Inventory files: vm-inventory, devices, vlans, prefixes, services
 - Diagram files: logical-topology, physical-notes
 - Updated README.md
-
+## 2026-04-06
+- Added: Proxmox reinstall
+- Added: secondary SSD as `vmdata`
+- Added: Ubuntu Server 24.04 workspace VM `ws1`
+- Added: SSH access to `ws1`
+- Added: Podman on `ws1`
+- Added: toolbox container workflow
+- Added: documentation for storage, bridges, workspace, and automation decision
+-
 ### Changed
 - n/a
 

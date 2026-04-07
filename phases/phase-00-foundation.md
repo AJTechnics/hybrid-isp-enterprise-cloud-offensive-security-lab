@@ -1,58 +1,29 @@
-# Phase 00 — Project Foundation
+# Phase 00 - Foundation
 
 ## Goal
 
-Create structure, naming, documentation, and build rules before deploying any VMs.
+Create the project structure, workspace foundation, storage policy, and documentation baseline before deeper automation and network deployment.
 
-## Scope
+## Completed
 
-This phase is purely organizational. No infrastructure is deployed.
+- [x] Proxmox reinstalled
+- [x] secondary SSD detected
+- [x] secondary SSD configured as `vmdata`
+- [x] Ubuntu Server 24.04 VM installed as `ws1`
+- [x] SSH access to `ws1` working
+- [x] Podman installed on `ws1`
+- [x] toolbox container baseline built
+- [x] documentation baseline started
 
-## Components
+## Remaining
 
-- GitHub repository
-- Obsidian vault structure
-- Naming standards
-- IP plan (initial)
-- VM inventory (initial)
-- Project journal (started)
+- [ ] commit and push updated documentation
+- [ ] connect OpenTofu to Proxmox
+- [ ] define first automated VM deployment
 
-## Tasks
+## Exit criteria
 
-- [x] Upgrade ThinkCentre to 16 GB RAM
-- [x] Confirm SSD capacity
-- [x] Install Proxmox
-- [x] Create GitHub repository
-- [x] Create Obsidian project vault/folder structure
-- [x] Add README.md
-- [x] Add phase files
-- [ ] Add VM inventory file
-- [ ] Add IP plan file
-- [ ] Decide router platform: VyOS or FRRouting-based Linux routers
-- [ ] Define hostname standard
-- [ ] Define subnet standard
-- [ ] Define phase tracker
-- [ ] Define lab rules for documenting changes
-
-## Risks / Blockers
-
-- Hardware not yet upgraded to 32 GB RAM
-- Proxmox not yet installed
-
-## Validation
-
-- Repository exists and is committed
-- Directory structure matches blueprint
-- README describes the project
-- Phase tracker is readable
-
-## Notes
-
-- Router platform decision (VyOS vs FRRouting-based Linux) should be made before Phase 1
-- Obsidian vault structure mirrors the GitHub repository structure
-
-## Exit Criteria
-
-- Project structure exists
-- First README is committed
-- Phase tracker is ready
+- documentation reflects actual state
+- workspace is stable
+- storage policy is documented
+- ready to begin OpenTofu integration

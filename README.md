@@ -57,7 +57,21 @@ See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project 
 
 ## Current Phase
 
-**Phase 0 — Project Foundation** (in progress)
+**Phase 0 — Project Foundation** (Done)
+
+## Current status
+
+### Completed foundation
+- Proxmox reinstalled
+- secondary SSD configured as `vmdata`
+- Ubuntu Server 24.04 workspace VM (`ws1`) deployed
+- SSH access working
+- Podman installed
+- toolbox container baseline built
+
+### Current note
+- Proxmox is currently connected through the UniFi switch
+- MikroTik integration will come later as a separate network realism phase
 
 ## Build Principles
 

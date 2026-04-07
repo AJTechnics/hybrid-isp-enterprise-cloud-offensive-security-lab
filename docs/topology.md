@@ -29,6 +29,22 @@ Parallel domains:
 - NetBox + automation + monitoring
 ```
 
+```
+## Current active topology
+## Mikrotik integration is planned later
+[ Desktop / Laptop ]
+        |
+      SSH
+        |
+      [ ws1 ]
+        |
+   [ Proxmox host ]
+        |
+   [ USW8-Lite ]
+
+
+```
+
 ## Routing Domains
 
 ### Provider Domain
