@@ -30,7 +30,12 @@ Use one entry per session. Copy the template below for each new entry.
 ## Entries
 
 <!-- Add new log entries below, newest first -->
+## 2026-04-07
 
+- Built first VM using OpenTofu + Proxmox (successful)
+- Learned provider setup, cloning, and state handling
+- Ran into disk size mismatch + API timeout (resolved)
+- Next: modularize VM + start network nodes
 ## 2026-04-01
 
 **Phase:** Phase 0 — Foundation
