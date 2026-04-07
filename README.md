@@ -79,8 +79,8 @@ See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project 
 
 ## Current Phase
 
-**Phase 00 — Project Foundation** (Done)
-**Phase 01 - ISP-Core-Edge** (In progress)
+- **Phase 00 — Project Foundation** (Done)
+- **Phase 01 - ISP-Core-Edge** (In progress)
 
 ## Current status
 

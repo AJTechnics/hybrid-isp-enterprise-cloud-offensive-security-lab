@@ -1,5 +1,15 @@
 # Phase 01 — Proxmox + ISP Core/Edge Foundation
 
+## Status
+In Progress
+
+## Current Entry Point
+Phase 01 begins from a working IaC foundation:
+- OpenTofu provisioning is operational
+- Proxmox provider works
+- Template-based VM cloning works
+- First IaC-managed VM deployment succeeded
+
 ## Goal
 
 Build the provider side and customer handoff first. Establish a working routed provider topology before adding enterprise components.
@@ -20,7 +30,7 @@ Provider domain only: ISP-CORE1, ISP-CORE2, ISP-EDGE1, PE1, CE1.
 
 ## Tasks
 
-- [ ] Create Proxmox bridges for lab segments
+- [x] Create Proxmox bridges for lab segments
 - [ ] Import or create router template
 - [ ] Deploy isp-core1
 - [ ] Deploy isp-core2
