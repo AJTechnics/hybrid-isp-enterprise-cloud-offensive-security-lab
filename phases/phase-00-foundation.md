@@ -14,6 +14,12 @@ Create the project structure, workspace foundation, storage policy, and document
 - [x] Podman installed on `ws1`
 - [x] toolbox container baseline built
 - [x] documentation baseline started
+- [x] OpenTofu Initialized
+- [x] Podman toolbox working
+- [x] Proxmox rebuilt
+- [x] `vmdata` storage configured
+- [x] `ws1` workspace VM deployed
+- [x] First VM successfully deployed via OpenTofu
 
 ## Remaining
 
