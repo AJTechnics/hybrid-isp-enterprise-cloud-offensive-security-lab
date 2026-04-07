@@ -20,7 +20,8 @@ See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project 
 
 ```text
 ├── homelab_lab_blueprint.md   # Full project blueprint
-├── docs/                      # Design documentation
+
+├── docs/                      # High-level documentation
 │   ├── overview.md
 │   ├── goals.md
 │   ├── topology.md
@@ -28,7 +29,8 @@ See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project 
 │   ├── naming-standards.md
 │   ├── hardware.md
 │   └── lessons-learned.md
-├── phases/                    # Per-phase task and design docs
+
+├── phases/                    # Phase definitions + progress tracking
 │   ├── phase-00-foundation.md
 │   ├── phase-01-isp-core-edge.md
 │   ├── phase-02-enterprise-firewall.md
@@ -38,28 +40,50 @@ See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project 
 │   ├── phase-06-netbox-automation.md
 │   ├── phase-07-aws-hybrid.md
 │   └── phase-08-monitoring.md
-├── inventory/                 # Device, VM, VLAN, prefix, service tracking
+
+├── build-log/                 # Detailed engineering logs
+│   ├── daily-log.md
+│   ├── change-log.md
+│   ├── 2026-04-07-opentofu-first-vm.md   # ← NEW (you created this)
+
+├── architecture/              # System-level design (NEW)
+│   ├── core-network.md
+
+├── runbooks/                  # Operational knowledge (NEW)
+│   ├── opentofu.md
+
+├── opentofu/                  # Infrastructure as Code (NEW CORE)
+│   ├── environments/
+│   │   └── lab-core/
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       ├── terraform.tfvars (ignored)
+│   │       └── .gitignore
+│   └── modules/               # (next step)
+
+├── inventory/                 # Tracking of deployed assets
 │   ├── vm-inventory.md
 │   ├── devices.md
 │   ├── vlans.md
 │   ├── prefixes.md
 │   └── services.md
-├── diagrams/                  # Topology and physical layout
+
+├── diagrams/                  # Visual topology
 │   ├── logical-topology.md
 │   └── physical-notes.md
-├── build-log/                 # Daily log and change log
-│   ├── daily-log.md
-│   └── change-log.md
-└── automation/                # Ansible playbooks and scripts
+
+└── automation/                # Config management layer
     ├── ansible/
     └── scripts/
 ```
 
 ## Current Phase
 
-**Phase 0 — Project Foundation** (Done)
+**Phase 00 — Project Foundation** (Done)
+**Phase 01 - ISP-Core-Edge** (In progress)
 
 ## Current status
+
 
 ### Completed foundation
 - Proxmox reinstalled
