@@ -44,7 +44,7 @@ See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project 
 ├── build-log/                 # Detailed engineering logs
 │   ├── daily-log.md
 │   ├── change-log.md
-│   ├── 2026-04-07-opentofu-first-vm.md   # ← NEW (you created this)
+│   ├── 2026-04-07-opentofu-first-vm.md   # ← (NEW) 
 
 ├── architecture/              # System-level design (NEW)
 │   ├── core-network.md
