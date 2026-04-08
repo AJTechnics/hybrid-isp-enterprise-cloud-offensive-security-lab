@@ -16,29 +16,50 @@ provider "proxmox" {
   insecure = true
 }
 
-resource "proxmox_virtual_environment_vm" "ubuntu_test" {
-  name      = "ubuntu-test-01"
-  node_name = "pve"
+module "isp_core1" {
+  source         = "../../modules/proxmox-vm"
+  name           = "isp-core1"
+  node_name      = "pve"
+  template_vm_id = 101
+  datastore_id   = "vmdata"
+  bridge         = "vmbr0"
+  cpu_cores      = 2
+  memory_mb      = 2048
+  disk_size_gb   = 60
+}
 
-  clone {
-    vm_id = 101
-  }
+module "isp_core2" {
+  source         = "../../modules/proxmox-vm"
+  name           = "isp-core2"
+  node_name      = "pve"
+  template_vm_id = 101
+  datastore_id   = "vmdata"
+  bridge         = "vmbr0"
+  cpu_cores      = 2
+  memory_mb      = 2048
+  disk_size_gb   = 60
+}
 
-  cpu {
-    cores = 2
-  }
+module "pe1" {
+  source         = "../../modules/proxmox-vm"
+  name           = "pe1"
+  node_name      = "pve"
+  template_vm_id = 101
+  datastore_id   = "vmdata"
+  bridge         = "vmbr0"
+  cpu_cores      = 2
+  memory_mb      = 2048
+  disk_size_gb   = 60
+}
 
-  memory {
-    dedicated = 2048
-  }
-
-  disk {
-    datastore_id = "vmdata"
-    interface    = "scsi0"
-    size         = 60
-  }
-
-  network_device {
-    bridge = "vmbr0"
-  }
+module "ce1" {
+  source         = "../../modules/proxmox-vm"
+  name           = "ce1"
+  node_name      = "pve"
+  template_vm_id = 101
+  datastore_id   = "vmdata"
+  bridge         = "vmbr0"
+  cpu_cores      = 2
+  memory_mb      = 2048
+  disk_size_gb   = 60
 }
