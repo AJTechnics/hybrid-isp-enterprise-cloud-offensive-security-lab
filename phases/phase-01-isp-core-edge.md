@@ -3,6 +3,19 @@
 ## Status
 In Progress
 
+##
+- Single test VM replaced by module-based phase 01 node definitions
+- Planned nods:
+ - isp-core1
+ - isp-core2
+ - pe1
+ - ce1
+
+## Current Provisioning Mode
+ - All nodes currently deploy from Ubuntu template VMID 101
+ - All nodes currently use vmbr0 for bootstrap access
+ - Next step is adding topology-specific interfaces and routing roles
+
 ## Current Entry Point
 Phase 01 begins from a working IaC foundation:
 - OpenTofu provisioning is operational
