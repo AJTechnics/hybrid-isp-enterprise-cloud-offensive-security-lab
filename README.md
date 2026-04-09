@@ -14,6 +14,72 @@ This lab is built in phases on Proxmox and covers:
 - **Automation & SoT** — NetBox, Ansible, Python
 - **Monitoring** — availability checks and operational visibility
 
+## Tech Stack
+
+### Core Platform
+- Proxmox — hypervisor platform
+- Ubuntu Server 24.04 LTS — base OS for general-purpose Linux VMs
+- Podman — container runtime for tooling and workspace execution
+
+### Infrastructure as Code
+- OpenTofu — VM provisioning and infrastructure lifecycle management
+- Proxmox templates — repeatable VM cloning baseline
+- Reusable OpenTofu modules — scalable infrastructure definitions
+
+### Configuration and Automation
+- Ansible — post-provisioning configuration and validation
+- Python — helper scripts, inventory generation, validation, and documentation glue
+
+### Networking and Security
+- VyOS (planned) — router platform for provider/core-edge phases
+- HAProxy (planned) — load balancing and application delivery
+- Kali Linux (planned) — offensive security validation
+
+### Source of Truth and Operations
+- NetBox (planned) — inventory, IPAM, topology relationships, and live documentation
+- GitHub — version control and engineering history
+- Markdown — project documentation and runbooks
+- IDE-based workflow — daily coding, refactoring, and structured development
+
+### Platform and Orchestration (Planned)
+- Kubernetes — container orchestration platform for services and applications
+- GitLab — source control, CI/CD pipelines, and automation platform
+
+## Implementation Approach
+
+The lab is built in layers rather than all at once.
+
+1. Foundation first
+   - Proxmox
+   - storage
+   - workspace VM
+   - containerized tooling
+
+2. Infrastructure as Code
+   - OpenTofu environments and modules
+   - template-based VM deployment
+   - Git-tracked changes
+
+3. Core network build-out
+   - provider/core-edge nodes
+   - multi-interface topology
+   - routing validation
+
+4. Configuration as Code
+   - Ansible-based host and network configuration
+   - reusable automation patterns
+
+5. Source of Truth and observability
+   - inventory, IPAM, diagrams, and monitoring
+
+## Daily Working Model
+
+- IDE for editing, refactoring, and project navigation
+- Terminal for execution, validation, and Git operations
+- Podman toolbox container for OpenTofu and other tooling
+- Build logs for implementation history
+- GitHub for version control and progress tracking
+
 See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project blueprint.
 
 ## Repository Structure
