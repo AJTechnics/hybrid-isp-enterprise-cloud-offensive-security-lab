@@ -9,6 +9,28 @@
 - Support a future study group with shared tasks and documentation
 - Create a portfolio project documented in Obsidian and GitHub
 
+## How These Goals Will Be Reached
+
+The project goals will be reached through a code-first and phase-based engineering workflow.
+
+### Delivery Method
+- Build the lab in phases rather than as one large deployment
+- Prefer repeatable builds over one-off manual work
+- Document each implementation step in GitHub and supporting notes
+- Use templates and reusable modules to reduce drift and speed up rebuilds
+
+### Technical Delivery Model
+- Provision infrastructure with OpenTofu
+- Use Proxmox templates for repeatable VM deployment
+- Configure systems and services through automation rather than manual clicking
+- Validate changes through testing, troubleshooting, and phased rollout
+- Evolve toward source-of-truth-driven infrastructure with inventory and topology tracking
+
+### Working Style
+- Use daily coding sessions to improve implementation speed and depth
+- Treat networking tasks as code and automation problems where possible
+- Use the lab as both a learning platform and a portfolio project
+
 ## Technical Goals by Domain
 
 ### Provider Networking
