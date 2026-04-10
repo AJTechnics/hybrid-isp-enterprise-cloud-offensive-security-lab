@@ -1,0 +1,7 @@
+- name: Baseline validation
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Show inventory hostname
+      ansible.builtin.debug:
+        msg: "Baseline reached for {{ inventory_hostname }}"
