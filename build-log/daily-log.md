@@ -31,7 +31,11 @@ Use one entry per session. Copy the template below for each new entry.
 
 <!-- Add new log entries below, newest first -->
 
-##  2026-04-08
+## 2026-04-08
+
+- Updated OpenTofu module to support multiple NICs
+- Applied Phase 01 topology
+- Deployed isp-core1, isp-core2, pe1, and ce1 with topology-specific bridge mappings
 
 ### Summary
 
