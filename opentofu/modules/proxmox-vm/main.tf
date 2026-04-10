@@ -28,7 +28,12 @@ resource "proxmox_virtual_environment_vm" "this" {
     size         = var.disk_size_gb
   }
 
-  network_device {
-    bridge = var.bridge
+  dynamic "network_device" {
+    for_each = var.network_bridges
+    content {
+      bridge = network_device.value
+    }
   }
 }
+
+

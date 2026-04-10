@@ -17,49 +17,50 @@ provider "proxmox" {
 }
 
 module "isp_core1" {
-  source         = "../../modules/proxmox-vm"
-  name           = "isp-core1"
-  node_name      = "pve"
-  template_vm_id = 101
-  datastore_id   = "vmdata"
-  bridge         = "vmbr0"
-  cpu_cores      = 2
-  memory_mb      = 2048
-  disk_size_gb   = 60
+  source          = "../../modules/proxmox-vm"
+  name            = "isp-core1"
+  node_name       = "pve"
+  template_vm_id  = 101
+  datastore_id    = "vmdata"
+  cpu_cores       = 2
+  memory_mb       = 2048
+  disk_size_gb    = 60
+  network_bridges = ["vmbr2", "vmbr3", "vmbr5"]
 }
 
 module "isp_core2" {
-  source         = "../../modules/proxmox-vm"
-  name           = "isp-core2"
-  node_name      = "pve"
-  template_vm_id = 101
-  datastore_id   = "vmdata"
-  bridge         = "vmbr0"
-  cpu_cores      = 2
-  memory_mb      = 2048
-  disk_size_gb   = 60
+  source          = "../../modules/proxmox-vm"
+  name            = "isp-core2"
+  node_name       = "pve"
+  template_vm_id  = 101
+  datastore_id    = "vmdata"
+  cpu_cores       = 2
+  memory_mb       = 2048
+  disk_size_gb    = 60
+  network_bridges = ["vmbr2", "vmbr4"]
 }
 
 module "pe1" {
-  source         = "../../modules/proxmox-vm"
-  name           = "pe1"
-  node_name      = "pve"
-  template_vm_id = 101
-  datastore_id   = "vmdata"
-  bridge         = "vmbr0"
-  cpu_cores      = 2
-  memory_mb      = 2048
-  disk_size_gb   = 60
+  source          = "../../modules/proxmox-vm"
+  name            = "pe1"
+  node_name       = "pve"
+  template_vm_id  = 101
+  datastore_id    = "vmdata"
+  cpu_cores       = 2
+  memory_mb       = 2048
+  disk_size_gb    = 60
+  network_bridges = ["vmbr3", "vmbr4", "vmbr1"]
 }
 
 module "ce1" {
-  source         = "../../modules/proxmox-vm"
-  name           = "ce1"
-  node_name      = "pve"
-  template_vm_id = 101
-  datastore_id   = "vmdata"
-  bridge         = "vmbr0"
-  cpu_cores      = 2
-  memory_mb      = 2048
-  disk_size_gb   = 60
+  source          = "../../modules/proxmox-vm"
+  name            = "ce1"
+  node_name       = "pve"
+  template_vm_id  = 101
+  datastore_id    = "vmdata"
+  cpu_cores       = 2
+  memory_mb       = 2048
+  disk_size_gb    = 60
+  network_bridges = ["vmbr1"]
 }
+

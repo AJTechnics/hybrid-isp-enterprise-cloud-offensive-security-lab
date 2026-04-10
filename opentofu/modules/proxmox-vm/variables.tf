@@ -14,10 +14,6 @@ variable "datastore_id" {
   type = string
 }
 
-variable "bridge" {
-  type = string
-}
-
 variable "cpu_cores" {
   type    = number
   default = 2
@@ -31,4 +27,8 @@ variable "memory_mb" {
 variable "disk_size_gb" {
   type    = number
   default = 60
+}
+
+variable "network_bridges" {
+  type = list(string)
 }
