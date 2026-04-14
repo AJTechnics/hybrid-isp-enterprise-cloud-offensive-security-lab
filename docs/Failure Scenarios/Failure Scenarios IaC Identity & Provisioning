@@ -1,0 +1,301 @@
+# Failure Scenarios — IaC Identity & Provisioning
+
+## Scope
+
+Covers failure cases observed during:
+
+* OpenTofu provisioning
+* Ansible identity configuration
+* Initial network setup
+
+---
+
+## Purpose
+
+* Document real-world failure modes
+* Improve troubleshooting speed
+* Build a security-oriented mindset (assume failure/misconfiguration)
+
+---
+
+# Scenario 1 — Proxmox Authentication Timeout
+
+## Error
+
+```bash
+Failed to authenticate: context deadline exceeded
+```
+
+## Cause
+
+* Temporary connectivity issue to Proxmox API
+* Possible DNS/network instability
+
+## Impact
+
+* OpenTofu unable to provision VM
+* Deployment halted
+
+## Resolution
+
+* Re-run `tofu apply`
+
+## Prevention
+
+* Validate API reachability before apply:
+
+```bash
+curl https://<proxmox-api>
+```
+
+---
+
+# Scenario 2 — Disk Resize Failure
+
+## Error
+
+```bash
+Requested size (20G) is lower than current size (60G)
+```
+
+## Cause
+
+* Template disk size larger than requested size
+* OpenTofu cannot shrink disks
+
+## Impact
+
+* VM creation failed
+
+## Resolution
+
+* Match disk size with template (60G)
+
+## Prevention
+
+* Inspect template before defining resources
+* Treat templates as baseline constraints
+
+---
+
+# Scenario 3 — Ansible Privilege Escalation Failure
+
+## Error
+
+```bash
+Missing sudo password
+```
+
+## Cause
+
+* Playbook requires root privileges
+* No become password provided
+
+## Impact
+
+* Playbook execution failed
+
+## Resolution
+
+```bash
+ansible-playbook ... -K
+```
+
+## Prevention
+
+* Always include `-K` when using `become: true`
+* Consider SSH key + passwordless sudo (future improvement)
+
+---
+
+# Scenario 4 — Incorrect Network Interface
+
+## Symptom
+
+* Network config applied but no connectivity
+
+## Cause
+
+* Wrong interface name (e.g. `eth0` instead of `ens18`)
+
+## Impact
+
+* Host becomes unreachable after netplan apply
+
+## Resolution
+
+```bash
+ip a
+```
+
+* Update `interface_name` in `host_vars`
+
+## Prevention
+
+* Always validate interface before applying config
+* Consider dynamic detection (future improvement)
+
+---
+
+# Scenario 5 — SSH Sent to HTTP Port
+
+## Error
+
+```bash
+Invalid character found in method name [SSH-2.0-libssh2...]
+```
+
+## Cause
+
+* SSH client connected to HTTP service (wrong port)
+
+## Impact
+
+* Connection failure
+* Misleading error message
+
+## Resolution
+
+* Verify correct port and service
+
+## Prevention
+
+* Validate:
+
+  * Target IP
+  * Port (22 vs 80/443)
+  * Service availability
+
+---
+
+# Scenario 6 — Multiple Hosts with Same IP
+
+## Symptom
+
+* Ansible behaves unpredictably
+* Wrong host gets configured
+
+## Cause
+
+* Cloned VMs share same IP
+* Playbook executed against multiple hosts
+
+## Impact
+
+* Network conflicts
+* Configuration drift
+
+## Resolution
+
+* Use:
+
+```bash
+--limit <host>
+```
+
+* Configure hosts one-by-one
+
+## Prevention
+
+* Never run playbooks on duplicated IP environments
+* Ensure unique identity before scaling
+
+---
+
+# Scenario 7 — Loss of Connectivity After Netplan Apply
+
+## Symptom
+
+* SSH session drops after playbook run
+
+## Cause
+
+* IP address changed during execution
+
+## Impact
+
+* Temporary loss of management access
+
+## Resolution
+
+* Reconnect using new IP:
+
+```bash
+ssh user@<new-ip>
+```
+
+## Prevention
+
+* Be aware of state transition:
+
+  * `ansible_host` ≠ `ip_address`
+* Validate new IP immediately after change
+
+---
+
+# Scenario 8 — Host Unreachable by Ansible
+
+## Error
+
+```bash
+UNREACHABLE!
+```
+
+## Cause
+
+* No network route
+* Wrong subnet
+* Firewall blocking SSH
+
+## Impact
+
+* Playbook cannot execute
+
+## Resolution
+
+* Verify:
+
+```bash
+ping <host>
+ssh user@<host>
+```
+
+## Prevention
+
+* Always perform connectivity test:
+
+```bash
+ansible all -m ping --limit <host>
+```
+
+---
+
+# Key Takeaways
+
+* Most failures are **network-related**, not tool-related
+* IaC does not remove complexity — it **exposes it earlier**
+* Identity and networking are **state-breaking operations**
+* Safe rollout = **one host at a time**
+* Clear separation of:
+
+  * Current state (reachability)
+  * Desired state (configuration)
+
+---
+
+# Security Perspective
+
+These scenarios simulate real-world conditions:
+
+* Misconfigured services
+* Wrong ports / protocol confusion
+* Identity conflicts
+* Broken network segmentation
+
+Understanding these failures directly supports:
+
+* Network security analysis
+* Pentesting methodology
+* Infrastructure hardening
+
+---
