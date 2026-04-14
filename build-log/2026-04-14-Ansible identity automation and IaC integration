@@ -1,0 +1,293 @@
+# Build Log — Ansible Identity Automation & IaC Integration
+
+## Date
+
+2026-04-12 → 2026-04-14
+
+---
+
+## Objective
+
+Extend Infrastructure as Code workflow by introducing **Ansible for post-provisioning configuration**, specifically:
+
+* Automating host identity
+* Moving from manual configuration → reproducible state enforcement
+
+---
+
+## Actions Performed
+
+### 1. Ansible Environment Setup
+
+* Created Ansible project structure within repository
+* Organized into:
+
+```bash
+ansible/
+├── inventories/lab/hosts.yml
+├── host_vars/
+├── playbooks/
+```
+
+* Established clear separation between:
+
+  * Inventory (targeting)
+  * Variables (desired state)
+  * Playbooks (execution)
+
+---
+
+### 2. Inventory Design Implemented
+
+Created `hosts.yml`:
+
+* Defined hosts:
+
+  * `svc1` (active)
+  * `media1` (prepared)
+
+Key concept introduced:
+
+* `ansible_host` used for **current reachable IP**
+
+---
+
+### 3. Host Variable Model Defined
+
+Created `host_vars/svc1.yml` and prepared `media1.yml`
+
+Defined per-host configuration:
+
+* hostname
+* interface_name
+* ip_address (target state)
+* prefix_length
+* gateway
+* dns_servers
+
+Key architectural decision:
+
+> Separate “how to reach host” vs “what host should become”
+
+---
+
+### 4. Identity Playbook Developed
+
+Created:
+
+```
+playbooks/set-identity.yml
+```
+
+Playbook responsibilities:
+
+* Set system hostname
+* Update `/etc/hosts`
+* Generate Netplan configuration
+* Apply network changes
+
+This establishes **host identity as code**
+
+---
+
+### 5. Execution Workflow Established
+
+Defined safe execution model:
+
+* Initial access via:
+
+  * DHCP or temporary IP
+* Ansible applies:
+
+  * Final static IP configuration
+
+Critical rule introduced:
+
+> Always execute playbooks per host using `--limit`
+
+---
+
+### 6. First Execution Attempt (svc1)
+
+Command executed:
+
+```bash
+ansible-playbook -i inventories/lab/hosts.yml playbooks/set-identity.yml --limit svc1
+```
+
+---
+
+### 7. Issue Encountered — Privilege Escalation
+
+Error:
+
+```
+Missing sudo password
+```
+
+Cause:
+
+* Playbook requires elevated privileges
+* No become password provided
+
+Resolution:
+
+```bash
+ansible-playbook ... -k -K
+```
+
+---
+
+### 8. Issue Encountered — Interface Name Mismatch
+
+Problem:
+
+* Incorrect interface (`eth0`) used in configuration
+
+Resolution:
+
+* Verified actual interface using:
+
+```bash
+ip a
+```
+
+* Updated to correct interface (e.g. `ens18`)
+
+---
+
+### 9. Successful Playbook Execution
+
+Final command:
+
+```bash
+ansible-playbook -i inventories/lab/hosts.yml playbooks/set-identity.yml --limit svc1 -k -K
+```
+
+Result:
+
+* Hostname configured
+* `/etc/hosts` updated
+* Netplan file generated
+* Network configuration successfully applied
+
+---
+
+### 10. Validation Workflow Performed
+
+Verified on target VM:
+
+```bash
+hostname
+ip a
+cat /etc/netplan/*.yaml
+```
+
+Confirmed:
+
+* Correct hostname
+* Correct static IP configuration
+* Network applied successfully
+
+---
+
+### 11. Connectivity & Networking Observations
+
+Observed error:
+
+```
+Invalid character found in method name [SSH-2.0-libssh2...]
+```
+
+Cause:
+
+* SSH traffic sent to HTTP service (port mismatch)
+
+Insight:
+
+* Importance of validating:
+
+  * Ports
+  * Services
+  * Network paths
+
+---
+
+### 12. Networking Expansion
+
+* Added new network segment:
+
+  * `VOID-DMZ`
+
+* Existing:
+
+  * `VOID-INET` → LAN devices
+
+Design direction:
+
+* Separate internal systems from exposed services
+* Prepare for:
+
+  * Reverse proxies
+  * Public-facing services
+  * Security segmentation
+
+---
+
+### 13. IaC Architecture Alignment
+
+Established working pipeline:
+
+1. OpenTofu → VM provisioning
+2. Temporary connectivity established
+3. Ansible → identity + networking configuration
+4. Host becomes stable and reproducible
+
+---
+
+## Current State
+
+* OpenTofu provisioning → stable
+* Ansible identity automation → validated (svc1)
+* Network segmentation →  in progress (DMZ introduced)
+* Second host (`media1`) → ready for configuration
+
+---
+
+## Key Learnings
+
+* Configuration management must follow provisioning
+* Network changes require controlled rollout (single host)
+* Interface naming varies per environment → must validate
+* Privilege escalation must be explicitly handled in Ansible
+* IaC is multi-layered:
+
+  * Provisioning layer
+  * Configuration layer
+  * Network design layer
+
+---
+
+## Next Steps
+
+* Apply playbook to `media1`
+* Validate multi-host repeatability (controlled rollout)
+* Begin abstraction into Ansible roles
+* Expand DMZ usage with real services
+* Introduce service deployment layer (containers)
+
+---
+
+## Strategic Impact
+
+This phase completes the transition from:
+
+> “VM exists” → “VM is fully defined by code”
+
+and lays the foundation for:
+
+* Automated lab environments
+* Security testing infrastructure
+* Scalable network design experiments
+
+---

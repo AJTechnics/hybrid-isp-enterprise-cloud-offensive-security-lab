@@ -1,0 +1,46 @@
+---
+- name: Set hostname and static IP
+  hosts: services
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ hostname }}"
+
+    - name: Ensure /etc/hosts has local hostname entry
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s+'
+        line: "127.0.1.1 {{ hostname }}"
+        create: true
+
+    - name: Write netplan config
+      ansible.builtin.copy:
+        dest: /etc/netplan/01-ansible-static.yaml
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          network:
+            version: 2
+            ethernets:
+              {{ interface_name }}:
+                dhcp4: false
+                addresses:
+                  - {{ ip_address }}/{{ prefix_length }}
+                routes:
+                  - to: default
+                    via: {{ gateway }}
+                nameservers:
+                  addresses:
+          {% for dns in dns_servers %}
+                    - {{ dns }}
+          {% endfor %}
+
+    - name: Apply netplan safely
+      ansible.builtin.shell: |
+        netplan apply
+      async: 10
+      poll: 0
