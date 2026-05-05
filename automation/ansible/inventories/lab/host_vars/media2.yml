@@ -217,7 +217,7 @@ minecraft_spawn_z: -498
 minecraft_oakcross_buildings_y_offset: 1
 minecraft_bluemap_enabled: true
 minecraft_bluemap_port: 8100
-minecraft_bluemap_tailscale_only: true
+minecraft_bluemap_tailscale_only: false
 minecraft_coreprotect_check_updates: false
 minecraft_coreprotect_log_chat: false
 minecraft_coreprotect_log_commands: false
