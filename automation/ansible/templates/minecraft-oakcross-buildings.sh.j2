@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Builds Oakcross starter structures at spawn-relative offsets.
+# This simulates NPC-led construction in staged announcements.
+
+DIMENSION="{{ minecraft_spawn_dimension | default('minecraft:overworld') }}"
+BASE_X="{{ minecraft_spawn_x | default(0) }}"
+BASE_Y="{{ (minecraft_spawn_y | default(63) | int) + (minecraft_oakcross_buildings_y_offset | default(0) | int) }}"
+BASE_Z="{{ minecraft_spawn_z | default(0) }}"
+KIOSK_FLOOR="{{ minecraft_oakcross_palette.kiosk_floor | default('oak_planks') }}"
+KIOSK_POSTS="{{ minecraft_oakcross_palette.kiosk_posts | default('oak_fence') }}"
+KIOSK_ROOF="{{ minecraft_oakcross_palette.kiosk_roof | default('spruce_slab') }}"
+TAVERN_FLOOR="{{ minecraft_oakcross_palette.tavern_floor | default('cobblestone') }}"
+TAVERN_FRAME="{{ minecraft_oakcross_palette.tavern_frame | default('spruce_log') }}"
+TAVERN_WALLS="{{ minecraft_oakcross_palette.tavern_walls | default('oak_planks') }}"
+TAVERN_ROOF="{{ minecraft_oakcross_palette.tavern_roof | default('spruce_stairs') }}"
+SMITHY_FLOOR="{{ minecraft_oakcross_palette.smithy_floor | default('cobblestone') }}"
+SMITHY_WALLS="{{ minecraft_oakcross_palette.smithy_walls | default('stone_bricks') }}"
+SMITHY_ROOF="{{ minecraft_oakcross_palette.smithy_roof | default('stone_brick_slab') }}"
+GUARD_FLOOR="{{ minecraft_oakcross_palette.guard_floor | default('cobblestone') }}"
+GUARD_WALLS="{{ minecraft_oakcross_palette.guard_walls | default('oak_log') }}"
+GUARD_ROOF="{{ minecraft_oakcross_palette.guard_roof | default('spruce_slab') }}"
+STALL_FLOOR="{{ minecraft_oakcross_palette.stall_floor | default('oak_planks') }}"
+STALL_POSTS="{{ minecraft_oakcross_palette.stall_posts | default('oak_fence') }}"
+STALL_CANOPY="{{ minecraft_oakcross_palette.stall_canopy | default('red_wool') }}"
+SCOUT_FLOOR="{{ minecraft_oakcross_palette.scout_floor | default('cobblestone') }}"
+SCOUT_WALLS="{{ minecraft_oakcross_palette.scout_walls | default('spruce_log') }}"
+SCOUT_ROOF="{{ minecraft_oakcross_palette.scout_roof | default('spruce_stairs') }}"
+
+wipe_first=0
+if [[ $# -gt 1 ]]; then
+  echo "usage: minecraft-oakcross-buildings [--wipe-first]" >&2
+  exit 64
+fi
+if [[ $# -eq 1 ]]; then
+  case "$1" in
+    --wipe-first)
+      wipe_first=1
+      ;;
+    -h|--help)
+      echo "usage: minecraft-oakcross-buildings [--wipe-first]"
+      exit 0
+      ;;
+    *)
+      echo "usage: minecraft-oakcross-buildings [--wipe-first]" >&2
+      exit 64
+      ;;
+  esac
+fi
+
+send() {
+  local cmd="$1"
+  /usr/bin/podman exec -u 999 minecraft mc-send-to-console "$cmd"
+}
+
+wait_ready() {
+  if ! /usr/bin/systemctl is-active --quiet minecraft.service; then
+    echo "minecraft.service is not active" >&2
+    exit 1
+  fi
+
+  local attempts=30
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if /usr/bin/podman exec -u 999 minecraft mc-health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "minecraft server did not become ready in time" >&2
+  exit 1
+}
+
+run_at() {
+  local x="$1"
+  local z="$2"
+  local inner="$3"
+  send "execute in ${DIMENSION} positioned ${x} ${BASE_Y} ${z} run ${inner}"
+}
+
+wipe_box() {
+  local x="$1"
+  local z="$2"
+  local radius_x="$3"
+  local radius_z="$4"
+  # Clear full-height structure footprints so old layered builds cannot survive above roof level.
+  send "execute in ${DIMENSION} run fill $((x - radius_x)) ${BASE_Y} $((z - radius_z)) $((x + radius_x)) 120 $((z + radius_z)) air"
+  send "execute in ${DIMENSION} run fill $((x - radius_x)) 121 $((z - radius_z)) $((x + radius_x)) 160 $((z + radius_z)) air"
+}
+
+wipe_village_layout() {
+  local base_x="$1"
+  local base_z="$2"
+
+  wipe_box "$((base_x + 0))" "$((base_z + 0))" 4 4
+  wipe_box "$((base_x - 18))" "$((base_z + 0))" 6 7
+  wipe_box "$((base_x + 18))" "$((base_z + 0))" 5 6
+  wipe_box "$((base_x + 0))" "$((base_z + 14))" 4 5
+  wipe_box "$((base_x - 18))" "$((base_z + 14))" 3 4
+  wipe_box "$((base_x + 18))" "$((base_z + 14))" 4 5
+}
+
+lay_foundation() {
+  local x="$1"
+  local z="$2"
+  local radius_x="$3"
+  local radius_z="$4"
+  local material="$5"
+  # Fill down a few blocks so structures don't float over uneven ground.
+  run_at "$x" "$z" "fill ~$((-radius_x)) ~-4 ~$((-radius_z)) ~${radius_x} ~-1 ~${radius_z} ${material}"
+}
+
+announce() {
+  local speaker="$1"
+  local text="$2"
+  send "tellraw @a [{\"text\":\"[${speaker}] \",\"color\":\"gold\"},{\"text\":\"${text}\",\"color\":\"yellow\"}]"
+}
+
+build_notice_kiosk() {
+  local x=$((BASE_X + 0))
+  local z=$((BASE_Z + 0))
+
+  lay_foundation "$x" "$z" 2 2 "${KIOSK_FLOOR}"
+  run_at "$x" "$z" "fill ~-2 ~ ~-2 ~2 ~4 ~2 air"
+  run_at "$x" "$z" "fill ~-2 ~ ~-2 ~2 ~ ~2 ${KIOSK_FLOOR}"
+  run_at "$x" "$z" "setblock ~-2 ~1 ~-2 ${KIOSK_POSTS}"
+  run_at "$x" "$z" "setblock ~2 ~1 ~-2 ${KIOSK_POSTS}"
+  run_at "$x" "$z" "setblock ~-2 ~1 ~2 ${KIOSK_POSTS}"
+  run_at "$x" "$z" "setblock ~2 ~1 ~2 ${KIOSK_POSTS}"
+  run_at "$x" "$z" "fill ~-2 ~4 ~-2 ~2 ~4 ~2 ${KIOSK_ROOF}"
+  run_at "$x" "$z" "setblock ~ ~1 ~ spruce_sign"
+  run_at "$x" "$z" "setblock ~1 ~1 ~ barrel"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~ barrel"
+  run_at "$x" "$z" "setblock ~2 ~3 ~2 lantern"
+  run_at "$x" "$z" "setblock ~-2 ~3 ~2 lantern"
+}
+
+build_tavern() {
+  local x=$((BASE_X - 18))
+  local z=$((BASE_Z + 0))
+
+  lay_foundation "$x" "$z" 4 5 "${TAVERN_FLOOR}"
+  run_at "$x" "$z" "fill ~-4 ~ ~-5 ~4 ~5 ~5 air"
+  run_at "$x" "$z" "fill ~-4 ~ ~-5 ~4 ~ ~5 ${TAVERN_FLOOR}"
+  run_at "$x" "$z" "fill ~-4 ~1 ~-5 ~4 ~4 ~5 ${TAVERN_FRAME} hollow"
+  run_at "$x" "$z" "fill ~-3 ~1 ~-4 ~3 ~3 ~4 ${TAVERN_WALLS} hollow"
+  run_at "$x" "$z" "fill ~-2 ~1 ~-3 ~2 ~3 ~3 air"
+  run_at "$x" "$z" "fill ~-4 ~5 ~-5 ~4 ~5 ~5 ${TAVERN_ROOF}"
+  run_at "$x" "$z" "setblock ~ ~1 ~-5 air"
+  run_at "$x" "$z" "setblock ~ ~1 ~-5 oak_door"
+  run_at "$x" "$z" "setblock ~ ~2 ~-5 oak_door[half=upper]"
+  run_at "$x" "$z" "setblock ~-2 ~1 ~4 red_bed"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~4 red_bed"
+  run_at "$x" "$z" "setblock ~2 ~1 ~4 white_bed"
+  run_at "$x" "$z" "setblock ~3 ~1 ~4 white_bed"
+  run_at "$x" "$z" "setblock ~0 ~1 ~2 campfire"
+}
+
+build_smithy() {
+  local x=$((BASE_X + 18))
+  local z=$((BASE_Z + 0))
+
+  lay_foundation "$x" "$z" 3 4 "${SMITHY_FLOOR}"
+  run_at "$x" "$z" "fill ~-3 ~ ~-4 ~3 ~4 ~4 air"
+  run_at "$x" "$z" "fill ~-3 ~ ~-4 ~3 ~ ~4 ${SMITHY_FLOOR}"
+  run_at "$x" "$z" "fill ~-3 ~1 ~-4 ~3 ~3 ~4 ${SMITHY_WALLS} hollow"
+  run_at "$x" "$z" "fill ~-2 ~1 ~-3 ~2 ~3 ~3 air"
+  run_at "$x" "$z" "fill ~-3 ~4 ~-4 ~3 ~4 ~4 ${SMITHY_ROOF}"
+  run_at "$x" "$z" "setblock ~ ~1 ~-4 air"
+  run_at "$x" "$z" "setblock ~ ~1 ~-4 spruce_door"
+  run_at "$x" "$z" "setblock ~ ~2 ~-4 spruce_door[half=upper]"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~1 blast_furnace"
+  run_at "$x" "$z" "setblock ~0 ~1 ~1 furnace"
+  run_at "$x" "$z" "setblock ~1 ~1 ~1 anvil"
+  run_at "$x" "$z" "setblock ~2 ~1 ~1 barrel"
+}
+
+build_guard_post() {
+  local x=$((BASE_X + 0))
+  local z=$((BASE_Z + 14))
+
+  lay_foundation "$x" "$z" 2 3 "${GUARD_FLOOR}"
+  run_at "$x" "$z" "fill ~-2 ~ ~-3 ~2 ~4 ~3 air"
+  run_at "$x" "$z" "fill ~-2 ~ ~-3 ~2 ~ ~3 ${GUARD_FLOOR}"
+  run_at "$x" "$z" "fill ~-2 ~1 ~-3 ~2 ~3 ~3 ${GUARD_WALLS} hollow"
+  run_at "$x" "$z" "fill ~-1 ~1 ~-2 ~1 ~3 ~2 air"
+  run_at "$x" "$z" "fill ~-2 ~4 ~-3 ~2 ~4 ~3 ${GUARD_ROOF}"
+  run_at "$x" "$z" "setblock ~ ~1 ~-3 air"
+  run_at "$x" "$z" "setblock ~ ~1 ~-3 oak_door"
+  run_at "$x" "$z" "setblock ~ ~2 ~-3 oak_door[half=upper]"
+  run_at "$x" "$z" "setblock ~1 ~1 ~2 cartography_table"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~2 bell"
+}
+
+build_market_stall() {
+  local x=$((BASE_X - 18))
+  local z=$((BASE_Z + 14))
+
+  lay_foundation "$x" "$z" 1 2 "${STALL_FLOOR}"
+  run_at "$x" "$z" "fill ~-1 ~ ~-2 ~1 ~3 ~2 air"
+  run_at "$x" "$z" "fill ~-1 ~ ~-2 ~1 ~ ~2 ${STALL_FLOOR}"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~-2 ${STALL_POSTS}"
+  run_at "$x" "$z" "setblock ~1 ~1 ~-2 ${STALL_POSTS}"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~2 ${STALL_POSTS}"
+  run_at "$x" "$z" "setblock ~1 ~1 ~2 ${STALL_POSTS}"
+  run_at "$x" "$z" "fill ~-1 ~3 ~-2 ~1 ~3 ~2 ${STALL_CANOPY}"
+  run_at "$x" "$z" "setblock ~ ~1 ~ barrel"
+}
+
+build_scout_hut() {
+  local x=$((BASE_X + 18))
+  local z=$((BASE_Z + 14))
+
+  lay_foundation "$x" "$z" 2 3 "${SCOUT_FLOOR}"
+  run_at "$x" "$z" "fill ~-2 ~ ~-3 ~2 ~4 ~3 air"
+  run_at "$x" "$z" "fill ~-2 ~ ~-3 ~2 ~ ~3 ${SCOUT_FLOOR}"
+  run_at "$x" "$z" "fill ~-2 ~1 ~-3 ~2 ~3 ~3 ${SCOUT_WALLS} hollow"
+  run_at "$x" "$z" "fill ~-1 ~1 ~-2 ~1 ~3 ~2 air"
+  run_at "$x" "$z" "fill ~-2 ~4 ~-3 ~2 ~4 ~3 ${SCOUT_ROOF}"
+  run_at "$x" "$z" "setblock ~ ~1 ~-3 air"
+  run_at "$x" "$z" "setblock ~ ~1 ~-3 spruce_door"
+  run_at "$x" "$z" "setblock ~ ~2 ~-3 spruce_door[half=upper]"
+  run_at "$x" "$z" "setblock ~-1 ~1 ~2 cartography_table"
+  run_at "$x" "$z" "setblock ~1 ~1 ~2 barrel"
+}
+
+wait_ready
+
+# Keep the Oakcross footprint loaded while the scripted build runs.
+send "execute in ${DIMENSION} run forceload add $((BASE_X - 64)) $((BASE_Z - 64)) $((BASE_X + 64)) $((BASE_Z + 64))"
+
+if [[ "$wipe_first" -eq 1 ]]; then
+  announce "Mira Vale" "Clearing old construction footprints..."
+  send "execute in ${DIMENSION} run forceload add $((1293 - 64)) $((-455 - 64)) $((1293 + 64)) $((-455 + 64))"
+  wipe_village_layout "${BASE_X}" "${BASE_Z}"
+  wipe_village_layout 1293 -455
+  # Extra targeted cleanup for prior reported stale fragments near the old site.
+  wipe_box 1294 -460 8 8
+fi
+
+announce "Mira Vale" "Marking the new square notice board."
+build_notice_kiosk
+sleep 1
+announce "Elira Thorn" "Raising beams for the new tavern."
+build_tavern
+sleep 1
+announce "Bram Coalhand" "Setting the forge foundations."
+build_smithy
+sleep 1
+announce "Captain Rowan Pike" "Building the watch post by the road."
+build_guard_post
+sleep 1
+announce "Sella Reed" "Stall canopy is going up in the market."
+build_market_stall
+sleep 1
+announce "Old Fen Gray" "Finishing the scout hut on the village edge."
+build_scout_hut
+
+send "execute in ${DIMENSION} run forceload remove $((BASE_X - 64)) $((BASE_Z - 64)) $((BASE_X + 64)) $((BASE_Z + 64))"
+if [[ "$wipe_first" -eq 1 ]]; then
+  send "execute in ${DIMENSION} run forceload remove $((1293 - 64)) $((-455 - 64)) $((1293 + 64)) $((-455 + 64))"
+fi
+
+echo "Oakcross building bootstrap complete."

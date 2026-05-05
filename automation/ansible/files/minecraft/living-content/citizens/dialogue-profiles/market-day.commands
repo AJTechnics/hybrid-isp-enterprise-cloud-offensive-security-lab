@@ -1,0 +1,4 @@
+# Weekly event: Market Day
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Market Day is live in Oakcross square.","color":"yellow"}]
+tellraw @a [{"text":"[Sella] ","color":"gold"},{"text":"Fresh stock today. Trade before sunset.","color":"yellow"}]

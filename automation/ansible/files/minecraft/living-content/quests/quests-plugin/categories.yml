@@ -1,0 +1,12 @@
+oakcross:
+  gui-name: "&6Oakcross Contracts"
+  display:
+    name: "&6Oakcross Notice Board"
+    lore:
+      - "&7Local work posted from the"
+      - "&7current spawn village."
+      - ""
+      - "&fBread, patrols, supplies,"
+      - "&fdeliveries, and scouting."
+    type: "BELL"
+  sort-order: 1

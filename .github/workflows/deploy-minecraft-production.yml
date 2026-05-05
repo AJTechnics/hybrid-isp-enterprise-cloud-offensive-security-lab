@@ -1,0 +1,84 @@
+name: Deploy Minecraft Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy
+        required: false
+        default: main
+      run_check_mode:
+        description: Run Ansible check mode before deploy
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: minecraft-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install ansible-core
+
+      - name: Run Ansible syntax checks
+        working-directory: automation/ansible
+        run: |
+          set -euo pipefail
+          ansible-playbook -i inventories/lab/hosts.yml playbooks/deploy-minecraft.yml --limit media1 --syntax-check
+          ansible-playbook -i inventories/lab/hosts.yml playbooks/diagnose-minecraft.yml --limit media1 --syntax-check
+
+  deploy:
+    needs: validate
+    runs-on:
+      - self-hosted
+      - ws1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Validate Ansible vault helper
+        working-directory: automation/ansible
+        run: |
+          set -euo pipefail
+          ./scripts/get-vault-pass.sh >/dev/null
+
+      - name: Optional dry run
+        if: ${{ inputs.run_check_mode }}
+        working-directory: automation/ansible
+        run: |
+          set -euo pipefail
+          ansible-playbook -i inventories/lab/hosts.yml playbooks/deploy-minecraft.yml --limit media1 --check --diff -e @inventories/lab/vault.yml
+
+      - name: Deploy media1
+        working-directory: automation/ansible
+        run: |
+          set -euo pipefail
+          ./scripts/deploy-media1.sh
+
+      - name: Verify production health
+        working-directory: automation/ansible
+        run: |
+          set -euo pipefail
+          ansible media1 -m shell -a 'systemctl is-active minecraft.service && systemctl is-active minecraft-backup.timer && systemctl is-active mcweb.service' -o
+          ansible media1 -m shell -a 'journalctl -u minecraft.service -n 80 --no-pager | grep -E "Done \(|Starting Minecraft server on" | tail -n 20' -o

@@ -1,0 +1,133 @@
+# Quests plugin skeleton content pack for Oakcross
+# This is an authoring skeleton, not a drop-in production file.
+# Adapt keys/format to the exact Quests plugin version in use.
+
+pack:
+  id: oakcross_phase1
+  settlement: Oakcross
+  settlement_anchor: current_spawn_village
+  season_default: autumn
+  spawn_policy:
+    world_spawn_role: starter_town_anchor
+    preserve_player_bed_spawns: true
+
+npcs:
+  town_crier: "Mira Vale"
+  innkeeper: "Elira Thorn"
+  blacksmith: "Bram Coalhand"
+  guard_captain: "Captain Rowan Pike"
+  market_trader: "Sella Reed"
+  ranger: "Old Fen Gray"
+
+quests:
+  - id: oakcross_bread_tavern
+    title: Bread for the Tavern
+    giver: innkeeper
+    region: spawn_village_tavern
+    prerequisites: []
+    objectives:
+      - type: deliver_item
+        item: bread
+        amount: 16
+    repeatability: daily
+    season: [spring, summer, autumn, winter]
+    rewards:
+      currency: 40
+      reputation: 5
+    dialogue_state:
+      pre: "We are short on bread before the dinner rush."
+      in_progress: "The ovens are ready when you are."
+      complete: "Perfect timing. The tavern is full tonight."
+
+  - id: oakcross_east_road_patrol
+    title: Check the East Road
+    giver: guard_captain
+    region: spawn_village_east_road
+    prerequisites: []
+    objectives:
+      - type: visit_waypoint
+        marker: spawn_village_gate
+      - type: visit_waypoint
+        marker: east_bridge
+      - type: return_to_npc
+        npc: guard_captain
+    repeatability: every_2_days
+    season: [spring, summer, autumn, winter]
+    rewards:
+      currency: 55
+      reputation: 7
+
+  - id: oakcross_missing_crate
+    title: Missing Crate
+    giver: market_trader
+    region: spawn_village_dock_road
+    prerequisites:
+      - oakcross_east_road_patrol
+    objectives:
+      - type: find_object
+        marker: missing_crate_site
+      - type: return_item
+        item: shipment_crate
+        amount: 1
+    repeatability: weekly
+    season: [summer, autumn]
+    rewards:
+      currency: 80
+      reputation: 10
+      shop_token: market_discount_t1
+
+  - id: oakcross_smith_ore
+    title: Smith Needs Ore
+    giver: blacksmith
+    region: spawn_village_smithy
+    prerequisites: []
+    objectives:
+      - type: gather_item
+        item: iron_ore
+        amount: 24
+      - type: gather_item
+        item: coal
+        amount: 24
+    repeatability: weekly
+    season: [spring, summer, autumn, winter]
+    rewards:
+      currency: 90
+      reputation: 10
+      unlock:
+        - smith_stock_tier_2
+
+  - id: oakcross_ruin_scout
+    title: Scout the Old Ruin
+    giver: ranger
+    region: old_ruin_corridor
+    prerequisites:
+      - oakcross_east_road_patrol
+    objectives:
+      - type: visit_waypoint
+        marker: old_ruin_entry
+      - type: return_to_npc
+        npc: ranger
+    repeatability: weekly
+    season: [autumn, winter]
+    rewards:
+      currency: 70
+      reputation: 12
+      cosmetic_title: "Pathfinder"
+
+weekly_events:
+  - id: caravan_arrival_day
+    active_days: [saturday]
+    effects:
+      - enable_quest_group: caravan_weekly
+      - price_modifier:
+          shop: oakcross_market
+          sell_bonus_percent: 10
+
+seasonal_events:
+  - id: harvestwake
+    season: autumn
+    location: spawn_village_square
+    effects:
+      - enable_quest_group: harvestwake
+      - enable_vendor: feast_vendor
+      - reputation_bonus_percent: 15

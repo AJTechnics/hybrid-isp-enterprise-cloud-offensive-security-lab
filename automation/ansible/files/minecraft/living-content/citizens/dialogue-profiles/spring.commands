@@ -1,0 +1,3 @@
+# Season profile: Spring (Bloomfair)
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Bloomfair season is active. Farm and flower contracts expanded.","color":"yellow"}]

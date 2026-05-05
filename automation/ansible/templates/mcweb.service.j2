@@ -1,0 +1,22 @@
+[Unit]
+Description=Minecraft web admin panel
+Documentation=https://github.com/your-org/your-repo
+After=network.target {{ minecraft_service_name }}.service
+Wants={{ minecraft_service_name }}.service
+
+[Service]
+Type=simple
+User={{ minecraft_mod_admin_user }}
+Group={{ minecraft_mod_group }}
+EnvironmentFile=/etc/minecraft/mcweb.env
+ExecStart=/usr/bin/python3 /opt/mcweb/mcweb.py
+Restart=on-failure
+RestartSec=5
+# Harden the service — it only needs access to the minecraft data directory
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths={{ minecraft_data_dir }}
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1429 @@
+---
+- name: Deploy Minecraft server
+  hosts: "{{ target_hosts | default('media1') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    minecraft_packages:
+      - podman
+      - restic
+      - libarchive-tools
+    tailscale_default_tags:
+      - tag:minecraft
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Restart minecraft
+      ansible.builtin.systemd_service:
+        name: "{{ minecraft_service_name }}.service"
+        state: restarted
+
+    - name: Restart ssh
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: restarted
+
+    - name: Restart mcweb
+      ansible.builtin.systemd_service:
+        name: mcweb.service
+        state: restarted
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Upgrade installed packages
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: true
+        autoclean: true
+      when: minecraft_os_upgrade | default(true) | bool
+
+    - name: Install Minecraft host packages
+      ansible.builtin.apt:
+        name: "{{ minecraft_packages }}"
+        state: latest
+
+    - name: Install Tailscale apt repository key
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: "0644"
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Configure Tailscale apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release }} main"
+        filename: tailscale
+        state: present
+        update_cache: true
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Install Tailscale package
+      ansible.builtin.apt:
+        name: tailscale
+        state: latest
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Enable and start tailscaled
+      ansible.builtin.systemd_service:
+        name: tailscaled
+        enabled: true
+        state: started
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Read Tailscale status
+      ansible.builtin.command: tailscale status --json
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Detect if Tailscale login is needed
+      ansible.builtin.set_fact:
+        tailscale_needs_login: >-
+          {{
+            (tailscale_status.rc | default(1)) != 0
+            or
+            ((tailscale_status.stdout | default('{}') | from_json).BackendState | default('Stopped')) != 'Running'
+          }}
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Bring up Tailscale using auth key
+      ansible.builtin.command: >-
+        tailscale up
+        --authkey={{ minecraft_tailscale_auth_key }}
+        {% if minecraft_tailscale_enable_ssh | bool %}--ssh{% endif %}
+        {% if minecraft_tailscale_accept_routes | bool %}--accept-routes{% endif %}
+        --advertise-tags={{ (minecraft_tailscale_tags | default(tailscale_default_tags)) | join(',') }}
+      register: tailscale_up_result
+      failed_when: false
+      when:
+        - minecraft_tailscale_enabled | bool
+        - tailscale_needs_login | default(true)
+        - minecraft_tailscale_auth_key | length > 0
+
+    - name: Show Tailscale auth result
+      ansible.builtin.debug:
+        msg: "Tailscale result: {{ tailscale_up_result.stdout }} | Error: {{ tailscale_up_result.stderr }}"
+      when:
+        - minecraft_tailscale_enabled | bool
+        - tailscale_needs_login | default(true)
+        - minecraft_tailscale_auth_key | length > 0
+
+    - name: Read non-interactive Tailscale login status
+      ansible.builtin.command: tailscale status
+      register: tailscale_interactive_login
+      changed_when: false
+      failed_when: false
+      when:
+        - minecraft_tailscale_enabled | bool
+        - tailscale_needs_login | default(true)
+        - minecraft_tailscale_auth_key | length == 0
+
+    - name: Show Tailscale login URL
+      ansible.builtin.debug:
+        msg: "{{ tailscale_interactive_login.stderr | default(tailscale_interactive_login.stdout) }}"
+      when:
+        - minecraft_tailscale_enabled | bool
+        - tailscale_needs_login | default(true)
+        - minecraft_tailscale_auth_key | length == 0
+        - tailscale_interactive_login is defined
+
+    - name: Detect Tailscale IPv4 address
+      ansible.builtin.command: tailscale ip -4
+      register: tailscale_ipv4_cmd
+      changed_when: false
+      failed_when: false
+      when: minecraft_tailscale_enabled | bool
+
+    - name: Set Tailscale IPv4 fact
+      ansible.builtin.set_fact:
+        tailscale_ipv4: "{{ tailscale_ipv4_cmd.stdout | trim }}"
+      when:
+        - minecraft_tailscale_enabled | bool
+        - tailscale_ipv4_cmd.rc == 0
+        - tailscale_ipv4_cmd.stdout | trim | length > 0
+
+    - name: Ensure Minecraft groups exist
+      ansible.builtin.group:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - "{{ minecraft_service_group }}"
+        - "{{ minecraft_mod_group }}"
+
+    - name: Ensure Minecraft service account exists
+      ansible.builtin.user:
+        name: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_service_group }}"
+        groups: "{{ minecraft_mod_group }}"
+        append: true
+        system: true
+        create_home: false
+        home: "{{ minecraft_data_root }}"
+        shell: /usr/sbin/nologin
+        state: present
+
+    - name: Ensure Minecraft mod admin exists
+      ansible.builtin.user:
+        name: "{{ minecraft_mod_admin_user }}"
+        group: "{{ minecraft_mod_group }}"
+        create_home: true
+        password_lock: true
+        shell: /bin/bash
+        state: present
+
+    - name: Ensure Minecraft mod admin SSH directory exists
+      ansible.builtin.file:
+        path: "/home/{{ minecraft_mod_admin_user }}/.ssh"
+        state: directory
+        owner: "{{ minecraft_mod_admin_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0700"
+      when: minecraft_mod_admin_authorized_keys | length > 0
+
+    - name: Install Minecraft mod admin authorized keys
+      ansible.builtin.copy:
+        dest: "/home/{{ minecraft_mod_admin_user }}/.ssh/authorized_keys"
+        content: "{{ minecraft_mod_admin_authorized_keys | join('\n') ~ '\n' }}"
+        owner: "{{ minecraft_mod_admin_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0600"
+      when: minecraft_mod_admin_authorized_keys | length > 0
+
+    - name: Read Minecraft service UID
+      ansible.builtin.command: "id -u {{ minecraft_service_user }}"
+      register: minecraft_uid_cmd
+      changed_when: false
+
+    - name: Read Minecraft mod group GID
+      ansible.builtin.command: "getent group {{ minecraft_mod_group }}"
+      register: minecraft_gid_cmd
+      changed_when: false
+
+    - name: Ensure Minecraft directories exist
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ minecraft_data_root }}", owner: root, group: root, mode: "0755" }
+        - { path: "{{ minecraft_data_dir }}", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_backup_dir }}", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "0750" }
+        - { path: "{{ minecraft_data_dir }}/world", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/world_nether", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/world_the_end", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/mods", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/config", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/plugins", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/disabled-plugins", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/datapacks", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+        - { path: "{{ minecraft_data_dir }}/disabled-mods", owner: "{{ minecraft_service_user }}", group: "{{ minecraft_mod_group }}", mode: "2775" }
+
+    - name: Ensure plugin directory tree ownership is consistent
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/plugins"
+        state: directory
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "2775"
+        recurse: true
+
+    - name: Seed manually managed plugin jars
+      ansible.builtin.copy:
+        src: "../files/minecraft/plugins/{{ item }}"
+        dest: "{{ minecraft_data_dir }}/plugins/{{ item }}"
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+      loop: "{{ minecraft_manual_plugin_jars | default([]) }}"
+      when:
+        - minecraft_manual_plugin_seed_enabled | default(false) | bool
+        - minecraft_manual_plugin_jars | default([]) | length > 0
+      notify:
+        - Restart minecraft
+
+    - name: Disable incompatible plugins by moving them out of the live plugins directory
+      ansible.builtin.command:
+        argv:
+          - mv
+          - "{{ minecraft_data_dir }}/plugins/{{ item }}"
+          - "{{ minecraft_data_dir }}/disabled-plugins/{{ item }}"
+      loop: "{{ minecraft_disabled_plugins | default([]) }}"
+      when: minecraft_disabled_plugins | default([]) | length > 0
+      register: moved_disabled_plugins
+      changed_when: moved_disabled_plugins.rc == 0
+      failed_when: false
+      notify:
+        - Restart minecraft
+
+    - name: Remove Paper remap cache for disabled plugins
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/plugins/.paper-remapped/{{ item }}"
+        state: absent
+      loop: "{{ minecraft_disabled_plugins | default([]) }}"
+      when: minecraft_disabled_plugins | default([]) | length > 0
+      notify:
+        - Restart minecraft
+
+    - name: Guard against duplicate plugin jars by plugin name
+      ansible.builtin.shell: |
+        set -euo pipefail
+
+        plugins_dir="{{ minecraft_data_dir }}/plugins"
+        map_file="$(mktemp)"
+        trap 'rm -f "$map_file"' EXIT
+
+        if [ ! -d "$plugins_dir" ]; then
+          exit 0
+        fi
+
+        found=0
+        for jar in "$plugins_dir"/*.jar; do
+          [ -e "$jar" ] || continue
+          found=1
+
+          metadata="$(bsdtar -xOf "$jar" plugin.yml 2>/dev/null || true)"
+          if [ -z "$metadata" ]; then
+            metadata="$(bsdtar -xOf "$jar" paper-plugin.yml 2>/dev/null || true)"
+          fi
+
+          plugin_name="$(printf '%s\n' "$metadata" | sed -n 's/^name:[[:space:]]*//p' | head -n 1 | tr -d '\r' | sed 's/[[:space:]]*$//')"
+
+          if [ -z "$plugin_name" ]; then
+            stem="$(basename "$jar" .jar)"
+            plugin_name="$(printf '%s' "$stem" | sed -E 's/-[0-9].*$//')"
+          fi
+
+          plugin_key="$(printf '%s' "$plugin_name" | tr '[:upper:]' '[:lower:]')"
+          printf '%s\t%s\n' "$plugin_key" "$(basename "$jar")" >> "$map_file"
+        done
+
+        if [ "$found" -eq 0 ]; then
+          exit 0
+        fi
+
+        duplicates="$(cut -f1 "$map_file" | sort | uniq -d || true)"
+        if [ -n "$duplicates" ]; then
+          echo "Duplicate plugin names detected in ${plugins_dir}:" >&2
+          while IFS= read -r dup; do
+            [ -n "$dup" ] || continue
+            echo "- ${dup}" >&2
+            awk -F '\t' -v name="$dup" '$1 == name {print "  * " $2}' "$map_file" >&2
+          done <<< "$duplicates"
+          exit 1
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Guard against incompatible Quests major-version mix
+      ansible.builtin.shell: |
+        set -euo pipefail
+
+        plugins_dir="{{ minecraft_data_dir }}/plugins"
+
+        if [ ! -d "$plugins_dir" ]; then
+          exit 0
+        fi
+
+        has_q3=0
+        has_q5=0
+
+        for jar in "$plugins_dir"/Quests-*.jar; do
+          [ -e "$jar" ] || continue
+          name="$(basename "$jar")"
+          if printf '%s' "$name" | grep -Eq '^Quests-3\.'; then
+            has_q3=1
+          fi
+          if printf '%s' "$name" | grep -Eq '^Quests-5\.'; then
+            has_q5=1
+          fi
+        done
+
+        if [ "$has_q3" -eq 1 ] && [ "$has_q5" -eq 1 ]; then
+          echo "Incompatible Quests major-version mix detected in ${plugins_dir}." >&2
+          echo "Found both Quests 3.x and Quests 5.x jars in the active plugin directory." >&2
+          echo "Keep only one Quests major version active and move the other jar to disabled-plugins." >&2
+          echo "Matching jars:" >&2
+          ls -1 "$plugins_dir"/Quests-*.jar 2>/dev/null | sed 's#^#- #' >&2 || true
+          exit 1
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Ensure Minecraft configuration directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /etc/minecraft
+        - /etc/containers/systemd
+
+    - name: Render Minecraft environment file
+      ansible.builtin.template:
+        src: ../templates/minecraft.env.j2
+        dest: /etc/minecraft/minecraft.env
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        minecraft_uid: "{{ minecraft_uid_cmd.stdout }}"
+        minecraft_gid: "{{ minecraft_gid_cmd.stdout.split(':')[2] }}"
+      notify:
+        - Restart minecraft
+
+    - name: Render Minecraft Quadlet unit
+      ansible.builtin.template:
+        src: ../templates/minecraft.container.j2
+        dest: "/etc/containers/systemd/{{ minecraft_service_name }}.container"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        minecraft_bluemap_bind_ip_resolved: >-
+          {{
+            (tailscale_ipv4 | default('0.0.0.0'))
+            if (minecraft_bluemap_tailscale_only | default(false) | bool)
+            else (minecraft_bind_ip)
+          }}
+      notify:
+        - Reload systemd
+        - Restart minecraft
+
+    - name: Render Minecraft backup environment file
+      ansible.builtin.template:
+        src: ../templates/minecraft-restic.env.j2
+        dest: /etc/minecraft/restic.env
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Seed Minecraft changelog file
+      ansible.builtin.copy:
+        dest: "{{ minecraft_data_dir }}/changelog.md"
+        content: |
+          # Minecraft Change Log
+
+          Track mod and configuration changes here.
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+        force: false
+
+    - name: Install Minecraft control wrapper
+      ansible.builtin.template:
+        src: ../templates/minecraftctl.j2
+        dest: /usr/local/bin/minecraftctl
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Oakcross NPC bootstrap script
+      ansible.builtin.template:
+        src: ../templates/minecraft-oakcross-npcs.sh.j2
+        dest: /usr/local/bin/minecraft-oakcross-npcs
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Oakcross dialogue profile apply script
+      ansible.builtin.template:
+        src: ../templates/minecraft-oakcross-dialogue-apply.sh.j2
+        dest: /usr/local/bin/minecraft-oakcross-dialogue-apply
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Oakcross dialogue schedule script
+      ansible.builtin.template:
+        src: ../templates/minecraft-oakcross-dialogue-schedule.sh.j2
+        dest: /usr/local/bin/minecraft-oakcross-dialogue-schedule
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Oakcross reactive NPC apply script
+      ansible.builtin.template:
+        src: ../templates/minecraft-oakcross-reactive-apply.sh.j2
+        dest: /usr/local/bin/minecraft-oakcross-reactive-apply
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Oakcross building bootstrap script
+      ansible.builtin.template:
+        src: ../templates/minecraft-oakcross-buildings.sh.j2
+        dest: /usr/local/bin/minecraft-oakcross-buildings
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Oakcross complete building rebuild script
+      ansible.builtin.template:
+        src: ../templates/minecraft-oakcross-buildings-rebuild.sh.j2
+        dest: /usr/local/bin/minecraft-oakcross-buildings-rebuild
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Minecraft backup script
+      ansible.builtin.template:
+        src: ../templates/minecraft-backup.sh.j2
+        dest: /usr/local/bin/minecraft-backup
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Minecraft manual backup script
+      ansible.builtin.template:
+        src: ../templates/minecraft-backup-manual.sh.j2
+        dest: /usr/local/bin/minecraft-backup-manual
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Minecraft player-state backup script
+      ansible.builtin.template:
+        src: ../templates/minecraft-playerstate-backup.sh.j2
+        dest: /usr/local/bin/minecraft-playerstate-backup
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Minecraft backup service
+      ansible.builtin.template:
+        src: ../templates/minecraft-backup.service.j2
+        dest: /etc/systemd/system/minecraft-backup.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install Minecraft backup timer
+      ansible.builtin.template:
+        src: ../templates/minecraft-backup.timer.j2
+        dest: /etc/systemd/system/minecraft-backup.timer
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install Minecraft player-state backup service
+      ansible.builtin.template:
+        src: ../templates/minecraft-playerstate-backup.service.j2
+        dest: /etc/systemd/system/minecraft-playerstate-backup.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+
+    - name: Install Minecraft player-state backup timer
+      ansible.builtin.template:
+        src: ../templates/minecraft-playerstate-backup.timer.j2
+        dest: /etc/systemd/system/minecraft-playerstate-backup.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+
+    - name: Install Oakcross dialogue schedule service
+      ansible.builtin.template:
+        src: ../templates/minecraft-dialogue-schedule.service.j2
+        dest: /etc/systemd/system/minecraft-dialogue-schedule.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+
+    - name: Install Oakcross dialogue schedule timer
+      ansible.builtin.template:
+        src: ../templates/minecraft-dialogue-schedule.timer.j2
+        dest: /etc/systemd/system/minecraft-dialogue-schedule.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+
+    - name: Install restricted sudoers policy for Minecraft admin
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/minecraft-admin
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+        content: |
+          {{ minecraft_mod_admin_user }} ALL=(root) NOPASSWD: /usr/local/bin/minecraftctl
+
+    - name: Restrict Minecraft mod admin SSH access to keys only
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/90-minecraft-admin.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Match User {{ minecraft_mod_admin_user }}
+            PasswordAuthentication no
+            KbdInteractiveAuthentication no
+            PubkeyAuthentication yes
+      when: minecraft_mod_admin_authorized_keys | length > 0
+      notify:
+        - Restart ssh
+
+    - name: Remove Minecraft mod admin SSH restriction when no keys are configured
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/90-minecraft-admin.conf
+        state: absent
+      when: minecraft_mod_admin_authorized_keys | length == 0
+      notify:
+        - Restart ssh
+
+    - name: Apply pending handler changes before enabling services
+      ansible.builtin.meta: flush_handlers
+
+    - name: Capture pre-deploy player-state checkpoint
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/minecraft-playerstate-backup
+          - --live
+          - --label
+          - predeploy
+      register: predeploy_playerstate_checkpoint
+      failed_when: >-
+        (predeploy_playerstate_checkpoint.rc | int) != 0
+        and ('No player-state paths were found to back up.' not in (predeploy_playerstate_checkpoint.stderr | default('')))
+      when: minecraft_playerstate_predeploy_checkpoint_enabled | default(false) | bool
+
+    - name: Ensure hub map import staging directory exists
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/imports/hubmap"
+        state: directory
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "2775"
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+
+    - name: Download premade hub map archive
+      ansible.builtin.get_url:
+        url: "{{ minecraft_hub_map_url }}"
+        dest: "{{ minecraft_data_dir }}/imports/hubmap/map.rar"
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+        force: true
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+
+    - name: Check last imported hub map source
+      ansible.builtin.stat:
+        path: "{{ minecraft_data_dir }}/.hub-map-source-url"
+      register: hub_map_source_stat
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+
+    - name: Read last imported hub map source
+      ansible.builtin.slurp:
+        path: "{{ minecraft_data_dir }}/.hub-map-source-url"
+      register: hub_map_source_slurp
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+        - hub_map_source_stat.stat.exists
+
+    - name: Decide whether hub map import is needed
+      ansible.builtin.set_fact:
+        hub_map_should_import: >-
+          {{
+            (minecraft_hub_import_force | default(false) | bool)
+            or (not hub_map_source_stat.stat.exists)
+            or ((hub_map_source_slurp.content | b64decode | trim) != (minecraft_hub_map_url | trim))
+          }}
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+
+    - name: Import premade hub map into target world directory
+      ansible.builtin.shell: |
+        set -euo pipefail
+        archive="{{ minecraft_data_dir }}/imports/hubmap/map.rar"
+        extract_dir="{{ minecraft_data_dir }}/imports/hubmap/extracted"
+        target_world="{{ minecraft_data_dir }}/{{ minecraft_hub_world_name | default('hub') }}"
+
+        rm -rf "$extract_dir"
+        mkdir -p "$extract_dir"
+        bsdtar -xf "$archive" -C "$extract_dir"
+
+        world_src=$(find "$extract_dir" -mindepth 1 -maxdepth 8 -type f -name level.dat -printf '%h\n' | head -n 1)
+        if [ -z "$world_src" ]; then
+          echo "No level.dat found in archive" >&2
+          exit 1
+        fi
+
+        if systemctl is-active --quiet "{{ minecraft_service_name }}.service"; then
+          systemctl stop "{{ minecraft_service_name }}.service"
+        fi
+
+        ts=$(date +%Y%m%d-%H%M%S)
+        if [ -d "$target_world" ]; then
+          mv "$target_world" "${target_world}.backup.${ts}"
+        fi
+
+        mkdir -p "$target_world"
+        cp -a "$world_src"/. "$target_world"/
+
+        chown -R {{ minecraft_service_user }}:{{ minecraft_mod_group }} "$target_world"
+        chmod -R g+rwX "$target_world"
+
+        printf '%s\n' "{{ minecraft_hub_map_url }}" > "{{ minecraft_data_dir }}/.hub-map-source-url"
+        chown {{ minecraft_service_user }}:{{ minecraft_mod_group }} "{{ minecraft_data_dir }}/.hub-map-source-url"
+        chmod 0664 "{{ minecraft_data_dir }}/.hub-map-source-url"
+      args:
+        executable: /bin/bash
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+        - hub_map_should_import | default(false) | bool
+
+    - name: Enable and start Minecraft service
+      ansible.builtin.systemd_service:
+        name: "{{ minecraft_service_name }}.service"
+        enabled: true
+        state: started
+
+    - name: Read loaded plugin list from the running server
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli "plugins"
+      register: minecraft_plugins_result
+      changed_when: false
+      failed_when: false
+      when:
+        - (minecraft_permissions_manage_enabled | default(false) | bool)
+          or (minecraft_reactive_npcs_enabled | default(false) | bool)
+
+    - name: Determine if LuckPerms and Denizen appear available
+      ansible.builtin.set_fact:
+        luckperms_available: >-
+          {{ 'luckperms' in (((minecraft_plugins_result.stdout | default('')) ~ ' ' ~ (minecraft_plugins_result.stderr | default(''))) | lower) }}
+        denizen_available: >-
+          {{ 'denizen' in (((minecraft_plugins_result.stdout | default('')) ~ ' ' ~ (minecraft_plugins_result.stderr | default(''))) | lower) }}
+      when:
+        - minecraft_plugins_result is defined
+
+    - name: Warn when reactive NPCs are enabled but Denizen is unavailable
+      ansible.builtin.debug:
+        msg: >-
+          minecraft_reactive_npcs_enabled is true, but Denizen did not appear in the
+          loaded plugin list. Reactive NPC assignment was skipped.
+      when:
+        - minecraft_reactive_npcs_enabled | default(false) | bool
+        - not (denizen_available | default(false))
+
+    - name: Warn when command permission groups are enabled but LuckPerms is unavailable
+      ansible.builtin.debug:
+        msg: >-
+          minecraft_permissions_manage_enabled is true, but LuckPerms did not appear in the
+          loaded plugin list. Command-access groups were skipped.
+      when:
+        - minecraft_permissions_manage_enabled | default(false) | bool
+        - not (luckperms_available | default(false))
+
+    - name: Build permission group items
+      ansible.builtin.set_fact:
+        minecraft_permission_group_items: "{{ minecraft_permission_groups | default({}) | dict2items }}"
+      when:
+        - minecraft_permissions_manage_enabled | default(false) | bool
+        - luckperms_available | default(false)
+
+    - name: Ensure LuckPerms groups exist
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli "luckperms creategroup {{ item.key }}"
+      loop: "{{ minecraft_permission_group_items | default([]) }}"
+      changed_when: false
+      failed_when: false
+      when:
+        - minecraft_permissions_manage_enabled | default(false) | bool
+        - luckperms_available | default(false)
+
+    - name: Apply LuckPerms permissions to groups
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli
+        "luckperms group {{ item.0.key }} permission set {{ item.1 }} true"
+      loop: "{{ (minecraft_permission_group_items | default([])) | subelements('value.permissions', skip_missing=True) }}"
+      changed_when: false
+      failed_when: false
+      when:
+        - minecraft_permissions_manage_enabled | default(false) | bool
+        - luckperms_available | default(false)
+
+    - name: Assign users to LuckPerms groups
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli
+        "luckperms user {{ item.1 }} parent add {{ item.0.key }}"
+      loop: "{{ (minecraft_permission_group_items | default([])) | subelements('value.users', skip_missing=True) }}"
+      changed_when: false
+      failed_when: false
+      when:
+        - minecraft_permissions_manage_enabled | default(false) | bool
+        - luckperms_available | default(false)
+
+    - name: Accept BlueMap resource download terms
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/BlueMap/core.conf"
+        regexp: '^accept-download:'
+        line: 'accept-download: true'
+      when: minecraft_bluemap_enabled | default(false) | bool
+      notify:
+        - Restart minecraft
+
+    - name: Enable BlueMap embedded webserver
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/BlueMap/webserver.conf"
+        regexp: '^enabled:'
+        line: 'enabled: true'
+      when: minecraft_bluemap_enabled | default(false) | bool
+      notify:
+        - Restart minecraft
+
+    - name: Set BlueMap webserver port
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/BlueMap/webserver.conf"
+        regexp: '^port:'
+        line: "port: {{ minecraft_bluemap_port | default(8100) }}"
+      when: minecraft_bluemap_enabled | default(false) | bool
+      notify:
+        - Restart minecraft
+
+    - name: Check CoreProtect config presence
+      ansible.builtin.stat:
+        path: "{{ minecraft_data_dir }}/plugins/CoreProtect/config.yml"
+      register: minecraft_coreprotect_config_stat
+
+    - name: Check AxGraves config presence
+      ansible.builtin.stat:
+        path: "{{ minecraft_data_dir }}/plugins/AxGraves/config.yml"
+      register: minecraft_axgraves_config_stat
+
+    - name: Check OnePlayerSleep config presence
+      ansible.builtin.stat:
+        path: "{{ minecraft_data_dir }}/plugins/OnePlayerSleep/config.yml"
+      register: minecraft_oneplayersleep_config_stat
+
+    - name: Check Essentials config presence
+      ansible.builtin.stat:
+        path: "{{ minecraft_data_dir }}/plugins/Essentials/config.yml"
+      register: minecraft_essentials_config_stat
+
+    - name: Check GSit config presence
+      ansible.builtin.stat:
+        path: "{{ minecraft_data_dir }}/plugins/GSit/config.yml"
+      register: minecraft_gsit_config_stat
+
+    - name: Disable CoreProtect update checks
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/CoreProtect/config.yml"
+        regexp: '^check-updates:'
+        line: "check-updates: {{ 'true' if minecraft_coreprotect_check_updates | default(false) | bool else 'false' }}"
+      when: minecraft_coreprotect_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Set CoreProtect command logging
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/CoreProtect/config.yml"
+        regexp: '^player-commands:'
+        line: "player-commands: {{ 'true' if minecraft_coreprotect_log_commands | default(false) | bool else 'false' }}"
+      when: minecraft_coreprotect_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Set CoreProtect chat logging
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/CoreProtect/config.yml"
+        regexp: '^player-messages:'
+        line: "player-messages: {{ 'true' if minecraft_coreprotect_log_chat | default(false) | bool else 'false' }}"
+      when: minecraft_coreprotect_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Set CoreProtect max radius
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/CoreProtect/config.yml"
+        regexp: '^max-radius:'
+        line: "max-radius: {{ minecraft_coreprotect_max_radius | default(100) }}"
+      when: minecraft_coreprotect_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Set AxGraves despawn timer
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/AxGraves/config.yml"
+        regexp: '^despawn-time-seconds:'
+        line: "despawn-time-seconds: {{ minecraft_axgraves_despawn_seconds | default(1800) }}"
+      when: minecraft_axgraves_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Set AxGraves item drop on expire
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/AxGraves/config.yml"
+        regexp: '^drop-items:'
+        line: "drop-items: {{ 'true' if minecraft_axgraves_drop_items_on_expire | default(false) | bool else 'false' }}"
+      when: minecraft_axgraves_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Restrict AxGraves instant pickup to grave owner
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/AxGraves/config.yml"
+        regexp: '^instant-pickup-only-own:'
+        line: "instant-pickup-only-own: {{ 'true' if minecraft_axgraves_instant_pickup_only_owner | default(true) | bool else 'false' }}"
+      when: minecraft_axgraves_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Restrict AxGraves interaction to grave owner
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/AxGraves/config.yml"
+        regexp: '^interact-only-own:'
+        line: "interact-only-own: {{ 'true' if minecraft_axgraves_interact_only_owner | default(true) | bool else 'false' }}"
+      when: minecraft_axgraves_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Set OnePlayerSleep weather clear behavior
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/OnePlayerSleep/config.yml"
+        regexp: '^weather-clear:'
+        line: "weather-clear: {{ 'true' if minecraft_oneplayersleep_weather_clear | default(true) | bool else 'false' }}"
+      when: minecraft_oneplayersleep_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Keep vanilla respawn handling for personal bed spawns
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/Essentials/config.yml"
+        regexp: '^respawn-listener-priority:'
+        line: "respawn-listener-priority: {{ minecraft_essentials_respawn_listener_priority | default('none') }}"
+      when: minecraft_essentials_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Allow multiple Essentials homes for permitted players
+      ansible.builtin.blockinfile:
+        path: "{{ minecraft_data_dir }}/plugins/Essentials/config.yml"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: sethome-multiple"
+        insertafter: '^world-home-permissions:'
+        block: |2
+          sethome-multiple:
+            default: {{ minecraft_essentials_multiple_homes_default | default(3) }}
+      when: minecraft_essentials_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Preserve bed-based respawns in EssentialsSpawn config
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/Essentials/config.yml"
+        regexp: '^respawn-at-home:'
+        line: "respawn-at-home: {{ 'true' if minecraft_essentials_respawn_at_home | default(true) | bool else 'false' }}"
+      when: minecraft_essentials_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Preserve respawn anchors in EssentialsSpawn config
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/Essentials/config.yml"
+        regexp: '^respawn-at-anchor:'
+        line: "respawn-at-anchor: {{ 'true' if minecraft_essentials_respawn_at_anchor | default(true) | bool else 'false' }}"
+      when: minecraft_essentials_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Disable GSit sitting on NPCs
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/GSit/config.yml"
+        regexp: '^\s*allow-sit-npc:'
+        line: '    allow-sit-npc: false'
+      when: minecraft_gsit_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Keep GSit player stacking enabled
+      ansible.builtin.lineinfile:
+        path: "{{ minecraft_data_dir }}/plugins/GSit/config.yml"
+        regexp: '^\s*allow-sit:'
+        line: '    allow-sit: true'
+      when: minecraft_gsit_config_stat.stat.exists
+      notify:
+        - Restart minecraft
+
+    - name: Find cached Paper jars before update restart
+      ansible.builtin.find:
+        paths: "{{ minecraft_data_dir }}"
+        patterns: "paper-{{ minecraft_version }}-*.jar"
+        file_type: file
+      register: minecraft_cached_paper_jars
+      when:
+        - minecraft_type | upper == 'PAPER'
+        - minecraft_restart_for_updates | default(false) | bool
+
+    - name: Delete cached Paper jars so latest build is re-fetched
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ minecraft_cached_paper_jars.files | default([]) }}"
+      when:
+        - minecraft_type | upper == 'PAPER'
+        - minecraft_restart_for_updates | default(false) | bool
+
+    - name: Restart Minecraft service to pull newer image and apply updates
+      ansible.builtin.systemd_service:
+        name: "{{ minecraft_service_name }}.service"
+        state: restarted
+      when: minecraft_restart_for_updates | default(false) | bool
+
+    - name: Reapply keepInventory gamerule in all Minecraft worlds (best effort)
+      ansible.builtin.command:
+        argv:
+          - podman
+          - exec
+          - -u
+          - "999"
+          - minecraft
+          - rcon-cli
+          - "{{ item }}"
+      loop:
+        - mv gamerule set keepInventory true {{ minecraft_level_name | default('world') }}
+        - mv gamerule set keepInventory true {{ (minecraft_level_name | default('world')) ~ '_nether' }}
+        - mv gamerule set keepInventory true {{ (minecraft_level_name | default('world')) ~ '_the_end' }}
+      changed_when: false
+      failed_when: false
+      when: minecraft_keep_inventory | default(false) | bool
+
+    - name: Set configured world spawn location (best effort)
+      ansible.builtin.shell: >-
+        podman exec minecraft sh -lc
+        'cd /data && rcon-cli "execute in {{ minecraft_spawn_dimension | default("minecraft:overworld") }} positioned {{ minecraft_spawn_x }} 0 {{ minecraft_spawn_z }} positioned over world_surface run setworldspawn ~ ~ ~"'
+      register: world_spawn_result
+      changed_when: false
+      failed_when: false
+      when:
+        - minecraft_spawn_x is defined
+        - minecraft_spawn_z is defined
+
+    - name: Register imported hub world in Multiverse (best effort)
+      ansible.builtin.shell: >-
+        podman exec minecraft sh -lc
+        'cd /data && rcon-cli "mv import {{ minecraft_hub_world_name | default("hub") }} normal"'
+      register: hub_world_import_result
+      changed_when: "'imported' in (hub_world_import_result.stdout | default('') | lower)"
+      failed_when: false
+      when:
+        - minecraft_hub_import_enabled | default(false) | bool
+        - minecraft_hub_map_url | default('') | length > 0
+        - hub_map_should_import | default(false) | bool
+
+    - name: Enable Minecraft backup timer when configured
+      ansible.builtin.systemd_service:
+        name: minecraft-backup.timer
+        enabled: true
+        state: started
+      when: minecraft_backup_enabled | default(minecraft_restic_enabled) | bool
+
+    - name: Disable Minecraft backup timer when backups are not configured
+      ansible.builtin.systemd_service:
+        name: minecraft-backup.timer
+        enabled: false
+        state: stopped
+      when: not (minecraft_backup_enabled | default(minecraft_restic_enabled) | bool)
+
+    - name: Enable Minecraft player-state backup timer when configured
+      ansible.builtin.systemd_service:
+        name: minecraft-playerstate-backup.timer
+        enabled: true
+        state: started
+      when: minecraft_playerstate_backup_enabled | default(false) | bool
+
+    - name: Disable Minecraft player-state backup timer when not configured
+      ansible.builtin.systemd_service:
+        name: minecraft-playerstate-backup.timer
+        enabled: false
+        state: stopped
+      when: not (minecraft_playerstate_backup_enabled | default(false) | bool)
+
+    - name: Enable Oakcross dialogue schedule timer when configured
+      ansible.builtin.systemd_service:
+        name: minecraft-dialogue-schedule.timer
+        enabled: true
+        state: started
+      when: minecraft_dialogue_schedule_enabled | default(false) | bool
+
+    - name: Disable Oakcross dialogue schedule timer when not configured
+      ansible.builtin.systemd_service:
+        name: minecraft-dialogue-schedule.timer
+        enabled: false
+        state: stopped
+      when: not (minecraft_dialogue_schedule_enabled | default(false) | bool)
+
+    - name: Ensure Quests content directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "2775"
+      loop:
+        - "{{ minecraft_data_dir }}/plugins/Quests"
+        - "{{ minecraft_data_dir }}/plugins/Quests/quests"
+      when: minecraft_quests_seed_enabled | default(false) | bool
+
+    - name: Ensure Oakcross dialogue profile directory exists
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/living-world/dialogue-profiles"
+        state: directory
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "2775"
+
+    - name: Ensure Oakcross living-world state directory exists
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/living-world/state"
+        state: directory
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "2775"
+
+    - name: Ensure Denizen scripts directory exists
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/plugins/Denizen/scripts"
+        state: directory
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "2775"
+      when: minecraft_reactive_npcs_enabled | default(false) | bool
+
+    - name: Seed Oakcross dialogue profile command packs
+      ansible.builtin.copy:
+        src: "../files/minecraft/living-content/citizens/dialogue-profiles/{{ item }}.commands"
+        dest: "{{ minecraft_data_dir }}/living-world/dialogue-profiles/{{ item }}.commands"
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+      loop:
+        - default
+        - market-day
+        - road-patrol
+        - gathering-week
+        - traveler-week
+        - spring
+        - summer
+        - autumn
+        - winter
+
+    - name: Seed Oakcross Denizen reactive scripts
+      ansible.builtin.copy:
+        src: ../files/minecraft/living-content/denizen/oakcross_reactive_npcs.dsc
+        dest: "{{ minecraft_data_dir }}/plugins/Denizen/scripts/oakcross_reactive_npcs.dsc"
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+      when: minecraft_reactive_npcs_enabled | default(false) | bool
+
+    - name: Seed Quests category configuration
+      ansible.builtin.copy:
+        src: ../files/minecraft/living-content/quests/quests-plugin/categories.yml
+        dest: "{{ minecraft_data_dir }}/plugins/Quests/categories.yml"
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+      when: minecraft_quests_seed_enabled | default(false) | bool
+      notify:
+        - Restart minecraft
+
+    - name: Define Oakcross quest file selection for this deploy
+      ansible.builtin.set_fact:
+        minecraft_oakcross_all_quest_files:
+          - oakcross-bread-tavern.yml
+          - oakcross-east-road-patrol.yml
+          - oakcross-missing-crate.yml
+          - oakcross-smith-needs-ore.yml
+          - oakcross-ruin-scout.yml
+        minecraft_oakcross_active_quest_files: >-
+          {{
+            (minecraft_phase2_mvp_quest_files | default([]))
+            if (minecraft_phase2_apply | default(false) | bool)
+            else
+            (minecraft_phase3_expansion_quest_files | default([]))
+            if (minecraft_phase3_apply | default(false) | bool)
+            else
+            [
+              'oakcross-bread-tavern.yml',
+              'oakcross-east-road-patrol.yml',
+              'oakcross-missing-crate.yml',
+              'oakcross-smith-needs-ore.yml',
+              'oakcross-ruin-scout.yml'
+            ]
+          }}
+      when: minecraft_quests_seed_enabled | default(false) | bool
+
+    - name: Seed Oakcross Quests files
+      ansible.builtin.copy:
+        src: "../files/minecraft/living-content/quests/quests-plugin/quests/{{ item }}"
+        dest: "{{ minecraft_data_dir }}/plugins/Quests/quests/{{ item }}"
+        owner: "{{ minecraft_service_user }}"
+        group: "{{ minecraft_mod_group }}"
+        mode: "0664"
+      loop: "{{ minecraft_oakcross_active_quest_files | default([]) }}"
+      when: minecraft_quests_seed_enabled | default(false) | bool
+      notify:
+        - Restart minecraft
+
+    - name: Remove inactive Oakcross quest files during phase 2 MVP rollout
+      ansible.builtin.file:
+        path: "{{ minecraft_data_dir }}/plugins/Quests/quests/{{ item }}"
+        state: absent
+      loop: "{{ (minecraft_oakcross_all_quest_files | default([])) | difference(minecraft_oakcross_active_quest_files | default([])) }}"
+      when:
+        - minecraft_quests_seed_enabled | default(false) | bool
+        - (minecraft_phase2_apply | default(false) | bool) or (minecraft_phase3_apply | default(false) | bool)
+      notify:
+        - Restart minecraft
+
+
+    # ── Living-world phase 1 fixup ────────────────────────────────────────────
+
+    - name: Apply handlers before living-world live fixup
+      ansible.builtin.meta: flush_handlers
+
+    - name: Phase 1 - reload Quests plugin to pick up seeded quest files
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli "quests reload"
+      register: quests_reload_result
+      changed_when: false
+      failed_when: false
+      when: minecraft_phase1_apply | default(false) | bool
+
+    - name: Phase 1 - run Oakcross NPC bootstrap (forceload + recreate + citizens reload)
+      ansible.builtin.command: >-
+        /usr/local/bin/minecraft-oakcross-npcs
+        {% if (minecraft_npc_bootstrap_remove_all | default(false) | bool) and (minecraft_npc_bootstrap_remove_all_confirm | default(false) | bool) %} --remove-all{% endif %}
+        --profile full
+      register: npc_bootstrap_result
+      changed_when: true
+      when: minecraft_phase1_apply | default(false) | bool
+
+    - name: Phase 1 - show bootstrap output
+      ansible.builtin.debug:
+        msg: "{{ npc_bootstrap_result.stdout_lines | default([]) }}"
+      when:
+        - minecraft_phase1_apply | default(false) | bool
+        - npc_bootstrap_result is defined
+
+    # ── Living-world phase 2 MVP rollout ─────────────────────────────────────
+
+    - name: Apply handlers before phase 2 MVP rollout
+      ansible.builtin.meta: flush_handlers
+
+    - name: Phase 2 - run Oakcross NPC bootstrap in MVP profile (3-5 NPC set)
+      ansible.builtin.command: >-
+        /usr/local/bin/minecraft-oakcross-npcs
+        {% if (minecraft_npc_bootstrap_remove_all | default(false) | bool) and (minecraft_npc_bootstrap_remove_all_confirm | default(false) | bool) %} --remove-all{% endif %}
+        --profile mvp
+      register: npc_phase2_bootstrap_result
+      changed_when: true
+      when: minecraft_phase2_apply | default(false) | bool
+
+    - name: Phase 2 - reload Quests plugin to apply MVP quest subset
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli "quests reload"
+      register: quests_phase2_reload_result
+      changed_when: false
+      failed_when: false
+      when: minecraft_phase2_apply | default(false) | bool
+
+    - name: Phase 2 - show MVP bootstrap output
+      ansible.builtin.debug:
+        msg: "{{ npc_phase2_bootstrap_result.stdout_lines | default([]) }}"
+      when:
+        - minecraft_phase2_apply | default(false) | bool
+        - npc_phase2_bootstrap_result is defined
+
+    # ── Living-world phase 3 expansion rollout ───────────────────────────────
+
+    - name: Apply handlers before phase 3 expansion rollout
+      ansible.builtin.meta: flush_handlers
+
+    - name: Phase 3 - run Oakcross NPC bootstrap in full profile
+      ansible.builtin.command: >-
+        /usr/local/bin/minecraft-oakcross-npcs
+        {% if (minecraft_npc_bootstrap_remove_all | default(false) | bool) and (minecraft_npc_bootstrap_remove_all_confirm | default(false) | bool) %} --remove-all{% endif %}
+        --profile full
+      register: npc_phase3_bootstrap_result
+      changed_when: true
+      when: minecraft_phase3_apply | default(false) | bool
+
+    - name: Phase 3 - reload Quests plugin to apply expansion quest set
+      ansible.builtin.shell: >-
+        podman exec -u 999 minecraft rcon-cli "quests reload"
+      register: quests_phase3_reload_result
+      changed_when: false
+      failed_when: false
+      when: minecraft_phase3_apply | default(false) | bool
+
+    - name: Phase 3 - show expansion bootstrap output
+      ansible.builtin.debug:
+        msg: "{{ npc_phase3_bootstrap_result.stdout_lines | default([]) }}"
+      when:
+        - minecraft_phase3_apply | default(false) | bool
+        - npc_phase3_bootstrap_result is defined
+
+    - name: Apply Oakcross reactive NPC assignments
+      ansible.builtin.command: /usr/local/bin/minecraft-oakcross-reactive-apply
+      register: reactive_apply_result
+      changed_when: true
+      when:
+        - minecraft_reactive_npcs_enabled | default(false) | bool
+        - denizen_available | default(false) | bool
+        - >-
+          (minecraft_reactive_npcs_apply | default(false) | bool)
+          or (minecraft_phase1_apply | default(false) | bool)
+          or (minecraft_phase2_apply | default(false) | bool)
+          or (minecraft_phase3_apply | default(false) | bool)
+
+    - name: Show Oakcross reactive NPC apply output
+      ansible.builtin.debug:
+        msg: "{{ reactive_apply_result.stdout_lines | default([]) }}"
+      when:
+        - reactive_apply_result is defined
+        - reactive_apply_result.stdout_lines is defined
+
+    # ── Living-world phase 4 dialogue/event profile rollout ──────────────────
+
+    - name: Determine active dialogue profile for phase 4 apply
+      ansible.builtin.set_fact:
+        minecraft_phase4_active_profile: >-
+          {{
+            (minecraft_event_profile_apply | default('') | trim)
+            if (minecraft_event_profile_apply | default('') | trim | length > 0)
+            else
+            ((minecraft_season_profile_apply | default('') | trim)
+             if (minecraft_season_profile_apply | default('') | trim | length > 0)
+             else (minecraft_dialogue_profile_apply | default('default') | trim))
+          }}
+      when: minecraft_phase4_apply | default(false) | bool
+
+    - name: Apply handlers before phase 4 dialogue rollout
+      ansible.builtin.meta: flush_handlers
+
+    - name: Phase 4 - apply Oakcross dialogue profile
+      ansible.builtin.command: >-
+        /usr/local/bin/minecraft-oakcross-dialogue-apply
+        --profile {{ minecraft_phase4_active_profile | default('default') }}
+      register: dialogue_phase4_apply_result
+      changed_when: true
+      when: minecraft_phase4_apply | default(false) | bool
+
+    - name: Phase 4 - show dialogue profile apply output
+      ansible.builtin.debug:
+        msg: "{{ dialogue_phase4_apply_result.stdout_lines | default([]) }}"
+      when:
+        - minecraft_phase4_apply | default(false) | bool
+        - dialogue_phase4_apply_result is defined
+
+    # ── Minecraft web admin panel ─────────────────────────────────────────────
+
+    - name: Decide whether mcweb is fully configured
+      ansible.builtin.set_fact:
+        mcweb_should_run: >-
+          {{
+            (mcweb_enabled | default(true) | bool)
+            and (mcweb_secret_key | default('') | length > 0)
+            and (mcweb_password_hash | default('') | length > 0)
+          }}
+
+    - name: Install mcweb Python dependencies
+      ansible.builtin.apt:
+        name:
+          - python3-flask
+          - python3-werkzeug
+        state: latest
+      when: mcweb_should_run | bool
+
+    - name: Create mcweb application directory
+      ansible.builtin.file:
+        path: /opt/mcweb
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: mcweb_should_run | bool
+
+    - name: Deploy mcweb application
+      ansible.builtin.copy:
+        src: ../files/mcweb.py
+        dest: /opt/mcweb/mcweb.py
+        owner: root
+        group: root
+        mode: "0755"
+      when: mcweb_should_run | bool
+      notify: Restart mcweb
+
+    - name: Render mcweb environment file
+      ansible.builtin.template:
+        src: ../templates/mcweb.env.j2
+        dest: /etc/minecraft/mcweb.env
+        owner: root
+        group: "{{ minecraft_mod_group }}"
+        mode: "0640"
+      vars:
+        mcweb_bind_ip: "{{ hostvars[inventory_hostname].mcweb_bind_ip | default(tailscale_ipv4 | default('0.0.0.0')) }}"
+      when: mcweb_should_run | bool
+      notify: Restart mcweb
+
+    - name: Install mcweb systemd service
+      ansible.builtin.template:
+        src: ../templates/mcweb.service.j2
+        dest: /etc/systemd/system/mcweb.service
+        owner: root
+        group: root
+        mode: "0644"
+      when: mcweb_should_run | bool
+      notify:
+        - Reload systemd
+        - Restart mcweb
+
+    - name: Apply pending handler changes for mcweb
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start mcweb service
+      ansible.builtin.systemd_service:
+        name: mcweb.service
+        enabled: true
+        state: started
+      when: mcweb_should_run | bool
+
+    - name: Disable and stop mcweb service when not enabled
+      ansible.builtin.systemd_service:
+        name: mcweb.service
+        enabled: false
+        state: stopped
+      when: not (mcweb_should_run | bool)
+      failed_when: false

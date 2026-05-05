@@ -1,0 +1,87 @@
+# Citizens command skeleton for Oakcross
+# Run in-game as operator after Citizens is installed.
+# Oakcross is the current village at world spawn.
+# Keep world spawn in the village square for orientation and NPC access.
+# Do not change player bed spawnpoints; beds should remain each player's personal respawn location.
+# Coordinates are placeholders; replace with existing village build coordinates near the current spawn square.
+# Use the spawn-relative placement pack if you do not have exact coordinates yet:
+# docs/minecraft-spawn-town-pack.md
+
+# 1) Mira Vale - Town Crier
+# Building: spawn square notice board kiosk
+/npc create "Mira Vale" --type player
+/npc skin villager
+/npc lookclose
+/npc text --add "Notice board updated. Caravan contracts are live this week."
+/npc text --add "Autumn market opens at sunset in the spawn square."
+/npc text --add "Gather 'round for the latest news from the realm."
+/npc text --add "The council meets on market days to discuss trade routes."
+/npc move
+
+# 2) Elira Thorn - Innkeeper
+# Building: tavern / inn
+/npc create "Elira Thorn" --type player
+/npc skin villager
+/npc lookclose
+/npc text --add "Beds are warm and rumors are fresh."
+/npc text --add "If you have bread, the tavern pays well today. Your bedspawn stays yours."
+/npc text --add "Welcome! First night's stay is on the house for new arrivals."
+/npc text --add "The ale here is cold and the stew is hot. What'll it be?"
+/npc move
+
+# 3) Bram Coalhand - Blacksmith
+# Building: smithy
+/npc create "Bram Coalhand" --type player
+/npc skin villager
+/npc lookclose
+/npc text --add "Bring me ore and I will open better stock."
+/npc text --add "A sharp tool is worth more than a dull blade."
+/npc text --add "The forge is hot today. Mind the embers if you step inside."
+/npc text --add "Quality work takes time, but it's worth the wait."
+/npc move
+
+# 4) Captain Rowan Pike - Guard Captain
+# Building: guard post
+/npc create "Captain Rowan Pike" --type player
+/npc skin villager
+/npc lookclose
+/npc text --add "Patrol the east road and report before nightfall."
+/npc text --add "The peace here is hard-won. We intend to keep it that way."
+/npc text --add "Watch for travelers on the main road. They may need escort."
+/npc text --add "Bandits avoid this place. Let's keep it that way."
+/npc move
+
+# 5) Sella Reed - Market Trader
+# Building: market stall
+/npc create "Sella Reed" --type player
+/npc skin villager
+/npc lookclose
+/npc text --add "Prices move with the season. Check back each week."
+/npc text --add "Fresh goods arrive with the caravans. Best to shop early."
+/npc text --add "Everything in my stall is quality. I have a reputation to maintain."
+/npc text --add "Trading is about fair deals. Yours today, mine tomorrow."
+/npc move
+
+# 6) Old Fen Gray - Ranger Scout
+# Building: scout hut
+/npc create "Old Fen Gray" --type player
+/npc skin villager
+/npc lookclose
+/npc text --add "The old ruin is quiet today. That usually means trouble."
+/npc text --add "The forest speaks to those who listen. I listen."
+/npc text --add "I scout the roads so you can sleep soundly in your beds."
+/npc text --add "Strange signs in the wood lately. Keep your wits about you."
+/npc move
+
+# Optional traits
+# /trait command
+# /trait type
+# /trait lookclose
+# /trait waypoint
+# Suggested first placements:
+# - Town Crier: village square near world spawn
+# - Innkeeper: tavern or largest house with beds upstairs
+# - Blacksmith: existing smithy building
+# - Guard Captain: village edge or gate facing main road
+# - Market Trader: existing stall near square
+# - Ranger Scout: edge house facing road, forest, or ruin route

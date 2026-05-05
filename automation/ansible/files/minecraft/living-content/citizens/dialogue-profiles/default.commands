@@ -1,0 +1,6 @@
+# Oakcross default profile
+# Note: Citizens text trait editing still requires in-game player context.
+# These are console-safe ambient/event board messages.
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Oakcross contracts are posted at the square.","color":"yellow"}]
+tellraw @a [{"text":"[Rowan] ","color":"gold"},{"text":"Keep the east road clear and report patrol findings.","color":"yellow"}]

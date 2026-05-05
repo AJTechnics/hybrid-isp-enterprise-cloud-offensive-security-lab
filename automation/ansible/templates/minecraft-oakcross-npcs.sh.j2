@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Recreates the Oakcross starter NPC set in one run.
+# This script removes existing NPCs by name first, then recreates them with core traits.
+#
+# RCON LIMITATION: Citizens text trait assignment requires in-game player context and
+# cannot be configured from the server console. To add dialogue to NPCs, run the commands
+# from automation/ansible/files/minecraft/living-content/citizens/oakcross-npcs.commands
+# while in-game as an operator after this script completes.
+
+WORLD_NAME="{{ minecraft_spawn_world | default(minecraft_level_name | default('world')) }}"
+DIMENSION="{{ minecraft_spawn_dimension | default('minecraft:overworld') }}"
+BASE_X="{{ minecraft_spawn_x | default(0) }}"
+BASE_Y="{{ minecraft_spawn_y | default(63) }}"
+BASE_Z="{{ minecraft_spawn_z | default(0) }}"
+STATE_DIR="{{ minecraft_data_dir }}/living-world/state"
+NPC_MAP_FILE="${STATE_DIR}/oakcross-npcs.env"
+
+usage() {
+  cat <<'USAGE'
+usage: minecraft-oakcross-npcs [--recreate-only] [--remove-all] [--profile full|mvp]
+
+Options:
+  --recreate-only   Skip deleting existing Oakcross NPCs before creating new ones.
+  --remove-all      Remove all Citizens NPCs before creating Oakcross NPCs.
+                    Use with caution.
+  --profile         NPC rollout profile. 'full' creates all Oakcross NPCs,
+                    'mvp' creates a starter set for phase 2 rollout.
+USAGE
+}
+
+remove_existing=1
+profile="full"
+remove_all=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --recreate-only)
+      remove_existing=0
+      shift
+      ;;
+    --remove-all)
+      remove_all=1
+      shift
+      ;;
+    --profile)
+      if [[ $# -lt 2 ]]; then
+        usage >&2
+        exit 64
+      fi
+      profile="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+
+if [[ "${profile}" != "full" && "${profile}" != "mvp" ]]; then
+  usage >&2
+  exit 64
+fi
+
+rcon() {
+  local cmd="$1"
+  /usr/bin/podman exec -u 999 minecraft rcon-cli "$cmd"
+}
+
+ensure_running() {
+  if ! /usr/bin/systemctl is-active --quiet minecraft.service; then
+    echo "minecraft.service is not active" >&2
+    exit 1
+  fi
+
+  local attempts=30
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if /usr/bin/podman exec -u 999 minecraft mc-health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "minecraft server did not become ready in time" >&2
+  exit 1
+}
+
+create_npc() {
+  local name="$1"
+  local dx="$2"
+  local dz="$3"
+  local env_key="$4"
+
+  local x=$((BASE_X + dx))
+  local y=$((BASE_Y + 4))
+  local z=$((BASE_Z + dz))
+  local output=""
+  local npc_id=""
+
+  # Create with an explicit world coordinate to avoid null sender location
+  # issues when Citizens commands are executed from server console.
+  output="$(rcon "npc create \"${name}\" --at ${x},${y},${z},${WORLD_NAME} --type player --trait lookclose,text,waypoints" 2>&1 || true)"
+
+  npc_id="$(printf '%s\n' "${output}" | awk '{ gsub(/\x1b\[[0-9;]*[A-Za-z]/, ""); if (match($0, /\(ID [0-9]+\)/)) { s = substr($0, RSTART, RLENGTH); gsub(/[^0-9]/, "", s); print s } }' | tail -n 1 || true)"
+  if [[ -n "${npc_id}" ]]; then
+    printf '%s=%s\n' "${env_key}" "${npc_id}" >> "${NPC_MAP_FILE}"
+  else
+    echo "Warning: could not parse created NPC ID for ${name}" >&2
+  fi
+
+  printf '%s\n' "${output}"
+}
+
+extract_npc_ids_from_live_list() {
+  local name="$1"
+  local output=""
+
+  output="$(rcon "npc list -a" 2>&1 || true)"
+  printf '%s\n' "${output}" | awk -v target_name="${name}" '
+    /^[0-9]+ / {
+      id = $1
+      $1 = ""
+      sub(/^ /, "", $0)
+      split($0, parts, " \\(tp\\)")
+      npc_name = parts[1]
+      if (npc_name == target_name) {
+        print id
+      }
+    }
+  ' | sort -n -r
+}
+
+extract_npc_id_from_live_list() {
+  local name="$1"
+  extract_npc_ids_from_live_list "${name}" | head -n 1
+}
+
+write_npc_map_entry() {
+  local env_key="$1"
+  local name="$2"
+  local npc_id=""
+
+  npc_id="$(extract_npc_id_from_live_list "${name}" || true)"
+  if [[ -n "${npc_id}" ]]; then
+    printf '%s=%s\n' "${env_key}" "${npc_id}" >> "${NPC_MAP_FILE}"
+  else
+    echo "Warning: could not resolve live NPC ID for ${name} from npc list" >&2
+  fi
+}
+
+remove_npc_by_name() {
+  local name="$1"
+  local npc_id=""
+  local npc_ids=""
+
+  npc_ids="$(extract_npc_ids_from_live_list "${name}" || true)"
+  if [[ -z "${npc_ids}" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r npc_id; do
+    [[ -z "${npc_id}" ]] && continue
+    rcon "npc remove ${npc_id}" || true
+  done <<< "${npc_ids}"
+}
+
+configure_wander_patrol() {
+  local npc_id="$1"
+  local x="$2"
+  local y="$3"
+  local z="$4"
+  local xz_range="$5"
+  local y_range="$6"
+
+  if [[ -z "${npc_id}" ]]; then
+    return 0
+  fi
+
+  rcon "npc wander --id ${npc_id} add ${x} ${y} ${z} ${WORLD_NAME}" || true
+  rcon "npc wander --id ${npc_id} xyrange ${xz_range} ${y_range}" || true
+  rcon "npc pathopt --id ${npc_id} --stationary-ticks 40 --distance-margin 1.5 --path-range 32 --avoid-water true" || true
+}
+
+add_text_trait() {
+  local name="$1"
+  local text="$2"
+  # Note: Text trait commands require in-game player context.
+  # This is applied in-game only; RCON console cannot modify text traits.
+  # Use the oakcross-npcs.commands file to add text lines manually in-game.
+}
+
+ensure_running
+
+mkdir -p "${STATE_DIR}"
+cat > "${NPC_MAP_FILE}" <<'EOF'
+# Generated by minecraft-oakcross-npcs. Re-run the bootstrap to refresh IDs.
+EOF
+
+if [[ "${remove_existing}" -eq 1 ]]; then
+  if [[ "${remove_all}" -eq 1 ]]; then
+    # Explicitly destructive mode for rare full resets.
+    rcon "npc remove all" || true
+  else
+    # Safe default: remove known Oakcross NPCs by resolved current IDs.
+    remove_npc_by_name "Mira Vale"
+    remove_npc_by_name "Elira Thorn"
+    remove_npc_by_name "Bram Coalhand"
+    remove_npc_by_name "Captain Rowan Pike"
+    remove_npc_by_name "Sella Reed"
+    remove_npc_by_name "Old Fen Gray"
+  fi
+fi
+# Force-load the Oakcross spawn area chunks so NPCs materialise as live entities on creation.
+rcon "execute in ${DIMENSION} run forceload add $((BASE_X - 32)) $((BASE_Z - 32)) $((BASE_X + 32)) $((BASE_Z + 32))" || true
+sleep 2
+
+# Create all Oakcross NPCs with core traits.
+# Text trait dialogue lines must be added in-game; see oakcross-npcs.commands for manual setup.
+create_npc "Mira Vale" 0 4 OAKCROSS_NPC_MIRA_VALE
+create_npc "Elira Thorn" -18 -6 OAKCROSS_NPC_ELIRA_THORN
+create_npc "Bram Coalhand" 18 -5 OAKCROSS_NPC_BRAM_COALHAND
+create_npc "Captain Rowan Pike" 0 10 OAKCROSS_NPC_CAPTAIN_ROWAN_PIKE
+
+if [[ "${profile}" == "full" ]]; then
+  create_npc "Sella Reed" -18 10 OAKCROSS_NPC_SELLA_REED
+  create_npc "Old Fen Gray" 18 10 OAKCROSS_NPC_OLD_FEN_GRAY
+else
+  # MVP profile keeps starter town staffing lean for phase 2.
+  create_npc "Old Fen Gray" 18 10 OAKCROSS_NPC_OLD_FEN_GRAY
+fi
+
+# shellcheck disable=SC1090
+. "${NPC_MAP_FILE}"
+
+# Add lightweight wander patrol routes so NPCs roam naturally around their posts.
+configure_wander_patrol "${OAKCROSS_NPC_MIRA_VALE:-}" "$((BASE_X + 0))" "$((BASE_Y + 1))" "$((BASE_Z + 4))" 4 1
+configure_wander_patrol "${OAKCROSS_NPC_ELIRA_THORN:-}" "$((BASE_X - 18))" "$((BASE_Y + 1))" "$((BASE_Z - 6))" 5 1
+configure_wander_patrol "${OAKCROSS_NPC_BRAM_COALHAND:-}" "$((BASE_X + 18))" "$((BASE_Y + 1))" "$((BASE_Z - 5))" 4 1
+configure_wander_patrol "${OAKCROSS_NPC_CAPTAIN_ROWAN_PIKE:-}" "$((BASE_X + 0))" "$((BASE_Y + 1))" "$((BASE_Z + 10))" 6 1
+configure_wander_patrol "${OAKCROSS_NPC_SELLA_REED:-}" "$((BASE_X - 18))" "$((BASE_Y + 1))" "$((BASE_Z + 10))" 4 1
+configure_wander_patrol "${OAKCROSS_NPC_OLD_FEN_GRAY:-}" "$((BASE_X + 18))" "$((BASE_Y + 1))" "$((BASE_Z + 10))" 6 1
+
+echo "Oakcross NPC bootstrap complete (profile: ${profile})."
+echo "Oakcross NPC ID map refreshed at ${NPC_MAP_FILE}."
+
+# Reload Citizens so the newly created NPCs are synchronised in memory.
+rcon "citizens reload" || true
+sleep 1
+
+echo "Note: Text trait dialogue lines must be added in-game by a player."
+echo "      Run the commands from oakcross-npcs.commands file while in-game as operator."

@@ -1,0 +1,46 @@
+---
+- name: Diagnose Minecraft service
+  hosts: media1
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Read Minecraft systemd status
+      ansible.builtin.command: systemctl status minecraft.service --no-pager --full
+      register: minecraft_systemd_status
+      changed_when: false
+      failed_when: false
+
+    - name: Read recent Minecraft journal
+      ansible.builtin.command: journalctl -u minecraft.service -n 200 --no-pager
+      register: minecraft_journal
+      changed_when: false
+      failed_when: false
+
+    - name: Read running container list
+      ansible.builtin.command: podman ps -a --format '{{"{{"}}.Names{{"}}"}} {{"{{"}}.Status{{"}}"}}'
+      register: minecraft_containers
+      changed_when: false
+      failed_when: false
+
+    - name: Read plugin directory contents
+      ansible.builtin.command: ls -1 /srv/minecraft/data/plugins
+      register: minecraft_plugins
+      changed_when: false
+      failed_when: false
+
+    - name: Show Minecraft systemd status
+      ansible.builtin.debug:
+        var: minecraft_systemd_status.stdout_lines
+
+    - name: Show recent Minecraft journal
+      ansible.builtin.debug:
+        var: minecraft_journal.stdout_lines
+
+    - name: Show container list
+      ansible.builtin.debug:
+        var: minecraft_containers.stdout_lines
+
+    - name: Show plugin list
+      ansible.builtin.debug:
+        var: minecraft_plugins.stdout_lines

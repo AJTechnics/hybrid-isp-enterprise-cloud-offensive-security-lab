@@ -1,0 +1,3 @@
+# Season profile: Summer (Sunreach)
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Sunreach season is active. Fishing and caravan routes are open.","color":"yellow"}]

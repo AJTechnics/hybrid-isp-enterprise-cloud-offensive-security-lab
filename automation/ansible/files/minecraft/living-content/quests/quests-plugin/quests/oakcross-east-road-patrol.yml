@@ -1,0 +1,46 @@
+tasks:
+  patrol_distance:
+    type: "walking"
+    distance: 350
+    worlds:
+      - "world_recovery"
+  report_back:
+    type: "citizens_interact"
+    npc-name: "Captain Rowan Pike"
+    worlds:
+      - "world_recovery"
+
+display:
+  name: "&6Check the East Road"
+  lore-normal:
+    - "&7Captain Rowan Pike wants a"
+    - "&7fresh patrol on the east road."
+    - ""
+    - "&7Walk &f350 blocks &7and report back."
+    - ""
+    - "&7Reward: &655 coins"
+  lore-started:
+    - ""
+    - "&7Distance covered: &f{patrol_distance:progress}&7/350"
+    - "&7Report filed: {report_back:complete}"
+  # For non-English characters, this file MUST stay encoded in UTF-8
+  quests:
+    oakcross-east-road-patrol:
+      name: '&6Check the East Road'
+      ask-message: '&7The east road has been unsettled lately. Clear out the undead and keep us safe.'
+      finish-message: '&7Good work. The road is clear for now.'
+      npc-giver-uuid: 2628429d-892b-4753-a176-0a570d7cc692
+      redo-delay: 172800
+      stages:
+        ordered:
+          1:
+            mobs-to-kill:
+              - ZOMBIE
+              - SKELETON
+            mob-amounts:
+              - 3
+              - 2
+      rewards:
+        money: 55
+        quest-points: 1
+  category: "oakcross"

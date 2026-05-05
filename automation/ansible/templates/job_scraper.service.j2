@@ -1,0 +1,21 @@
+[Unit]
+Description=Job scraper – Cloud / Network / Systems roles
+Documentation=https://github.com/Bunsly/JobSpy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=job-scraper
+Group=job-scraper
+EnvironmentFile=/etc/job-scraper/job_scraper.env
+ExecStart={{ job_scraper_dir }}/venv/bin/python3 {{ job_scraper_dir }}/job_scraper.py
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths={{ job_scraper_db_dir }}
+ProtectHome=true
+NoNewPrivileges=true

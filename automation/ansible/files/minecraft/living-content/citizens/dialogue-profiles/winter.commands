@@ -1,0 +1,3 @@
+# Season profile: Winter (Frostwatch)
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Frostwatch season is active. Supply routes are high priority.","color":"yellow"}]

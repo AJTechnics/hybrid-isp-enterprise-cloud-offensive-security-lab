@@ -1,0 +1,4 @@
+# Weekly event: Road Patrol
+
+tellraw @a [{"text":"[Rowan] ","color":"gold"},{"text":"Road Patrol week is active. Check gate to bridge and return.","color":"yellow"}]
+tellraw @a [{"text":"[Fen] ","color":"gold"},{"text":"Watch the ruin trail while routes stay busy.","color":"yellow"}]

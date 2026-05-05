@@ -1,0 +1,8 @@
+[Unit]
+Description=Apply scheduled Oakcross dialogue profile
+After=network-online.target minecraft.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/minecraft-oakcross-dialogue-schedule

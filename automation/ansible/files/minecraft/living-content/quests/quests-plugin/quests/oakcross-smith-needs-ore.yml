@@ -1,0 +1,79 @@
+tasks:
+  raw_iron_delivery:
+    type: "citizens_deliver"
+    npc-name: "Bram Coalhand"
+    item: RAW_IRON
+    amount: 24
+    remove-items-when-complete: true
+    accept-partial-completion: false
+    worlds:
+      - "world_recovery"
+  coal_delivery:
+    type: "citizens_deliver"
+    npc-name: "Bram Coalhand"
+    item: COAL
+    amount: 24
+    remove-items-when-complete: true
+    accept-partial-completion: false
+    worlds:
+      - "world_recovery"
+
+display:
+  name: "&6Smith Needs Ore"
+  lore-normal:
+    - "&7Bram Coalhand is low on stock."
+    - ""
+    - "&7Deliver &f24 raw iron &7and &f24 coal&7."
+    - ""
+    - "&7Reward: &690 coins"
+  lore-started:
+    - ""
+    - "&7Raw iron: &f{raw_iron_delivery:progress}&7/24"
+    - "&7Coal: &f{coal_delivery:progress}&7/24"
+  type: "ANVIL"
+
+startstring:
+  - " &8- &7Bring &f24 raw iron &7and &f24 coal &7to &6Bram Coalhand&7."
+
+rewardstring:
+  - " &8- &7The forge is burning bright again."
+  - " &8- &6You received 90 coins."
+
+vaultreward: 90
+
+placeholders:
+  description: "&7Deliver smithing stock to &6Bram Coalhand&7."
+  progress: " &8- &f{raw_iron_delivery:progress}&7/24 raw iron, &f{coal_delivery:progress}&7/24 coal"
+
+progress-placeholders:
+  raw_iron_delivery: "&f{raw_iron_delivery:progress}&7/24 raw iron"
+  coal_delivery: "&f{coal_delivery:progress}&7/24 coal"
+
+options:
+  # For non-English characters, this file MUST stay encoded in UTF-8
+  quests:
+    oakcross-smith-needs-ore:
+      name: '&6Smith Needs Ore'
+      ask-message: '&7The forge runs cold. Bring me &f24 raw iron &7and &f24 coal&7.'
+      finish-message: '&7The forge burns bright again. Good work.'
+      npc-giver-uuid: 526d1573-443e-47d0-8cc4-6ced5f1b835d
+      redo-delay: 604800
+      stages:
+        ordered:
+          1:
+            items-to-deliver:
+              - ==: org.bukkit.inventory.ItemStack
+                type: RAW_IRON
+                amount: 24
+              - ==: org.bukkit.inventory.ItemStack
+                type: COAL
+                amount: 24
+            npc-delivery-uuids:
+              - 526d1573-443e-47d0-8cc4-6ced5f1b835d
+              - 526d1573-443e-47d0-8cc4-6ced5f1b835d
+            delivery-messages:
+              - '&7Delivering raw iron to Bram...'
+              - '&7Delivering coal to Bram...'
+      rewards:
+        money: 90
+        quest-points: 1

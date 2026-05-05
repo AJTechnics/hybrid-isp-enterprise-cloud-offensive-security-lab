@@ -23,9 +23,9 @@ Create the project structure, workspace foundation, storage policy, and document
 
 ## Remaining
 
-- [ ] commit and push updated documentation
-- [ ] connect OpenTofu to Proxmox
-- [ ] define first automated VM deployment
+- [x] commit and push updated documentation
+- [x] connect OpenTofu to Proxmox
+- [x] define first automated VM deployment
 
 ## Exit criteria
 

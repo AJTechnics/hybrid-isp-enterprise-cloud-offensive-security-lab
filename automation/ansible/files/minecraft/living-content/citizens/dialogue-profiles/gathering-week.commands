@@ -1,0 +1,4 @@
+# Weekly event: Gathering Week
+
+tellraw @a [{"text":"[Elira] ","color":"gold"},{"text":"Gathering Week has begun. Bring food bundles to the tavern.","color":"yellow"}]
+tellraw @a [{"text":"[Bram] ","color":"gold"},{"text":"Ore and coal turn-ins are prioritized this week.","color":"yellow"}]

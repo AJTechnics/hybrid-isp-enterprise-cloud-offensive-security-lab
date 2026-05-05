@@ -1,0 +1,293 @@
+hostname: media2
+interface_name: ens18
+ip_address: 192.168.1.133
+prefix_length: 24
+gateway: 192.168.1.1
+dns_servers:
+  - 192.168.1.1
+
+minecraft_image: docker.io/itzg/minecraft-server:java21
+minecraft_type: PAPER
+minecraft_version: 1.21.4
+minecraft_memory: 5G
+minecraft_timezone: UTC
+minecraft_port: 25565
+minecraft_bind_ip: 0.0.0.0
+minecraft_data_root: /srv/minecraft
+minecraft_data_dir: /srv/minecraft/data
+minecraft_backup_dir: /srv/minecraft/backups-media2
+minecraft_service_name: minecraft
+minecraft_service_user: minecraft
+minecraft_service_group: minecraft
+minecraft_mod_group: mcmods
+minecraft_mod_admin_user: mcadmin
+minecraft_mod_admin_authorized_keys: []
+minecraft_enable_whitelist: true
+minecraft_whitelist:
+  - Monstercraftguy
+  - Genderblender69
+minecraft_ops: 
+  - Genderblender69
+minecraft_motd: "\u00a76Survival \u00a7f| sib_world"
+# media2 is a clean target. Do not seed or migrate plugin or mod content.
+minecraft_manual_plugin_seed_enabled: false
+minecraft_manual_plugin_jars: []
+
+minecraft_paper_plugins_base:
+  # --- Town and castle server foundation ------------------------------------
+  # EssentialsX - core commands and economy/chat utility plugin
+  - https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsX-2.21.2.jar
+  # Vault - economy API bridge (GitHub)
+  - https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar
+  # EssentialsXSpawn - provides /spawn and spawn management commands
+  - https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsXSpawn-2.21.2.jar
+  # ViaVersion - allow newer clients on older protocol layers
+  - https://github.com/ViaVersion/ViaVersion/releases/download/5.9.0/ViaVersion-5.9.0.jar
+  # ViaBackwards - allow older clients to join newer server versions
+  - https://github.com/ViaVersion/ViaBackwards/releases/download/5.9.0/ViaBackwards-5.9.0.jar
+  # WorldEdit - in-game world manipulation and build tools for Paper/Bukkit
+  - https://cdn.modrinth.com/data/1u6JkXh5/versions/p8T2aZ8U/worldedit-bukkit-7.4.2.jar
+  # --- Conservative top-5 QoL set -------------------------------------------
+  # BlueMap - browser map for planning towns, roads, and castle layouts
+  - https://cdn.modrinth.com/data/swbUV1cr/versions/nTnTxZjy/bluemap-5.16-spigot.jar
+  # CoreProtect - rollback and block logging for grief/accident recovery
+  - https://cdn.modrinth.com/data/Lu3KuzdV/versions/HD2IvrxS/CoreProtect-CE-23.1.jar
+  # GSit - sit, crawl, and pose interactions for taverns and town interiors
+  - https://cdn.modrinth.com/data/GOHbQGyX/versions/UZnBkQYH/GSit-3.3.3.jar
+  # AxGraves - safe death graves so survival setbacks are less punishing
+  - https://cdn.modrinth.com/data/Cz6msz34/versions/rSHiNcdQ/AxGraves-1.28.0.jar
+  # One Player Sleep+ - skip nights without requiring the whole server to sleep
+  - https://cdn.modrinth.com/data/RfE1BSdK/versions/SHL26ULg/OnePlayerSleep-3.6.4.jar
+  # QuickShop-Hikari - player chest shops backed by Vault economy
+  - https://cdn.modrinth.com/data/ijC5dDkD/versions/QdShnamC/QuickShop-Hikari-6.2.0.11.jar
+
+# --- Living-world phase 1 plugin pins (candidate set, not auto-enabled) -----
+minecraft_living_phase1_plugins_pinned:
+  # Citizens - dynamic NPC framework
+  - https://ci.citizensnpcs.co/view/Citizens/job/Citizens2/lastSuccessfulBuild/artifact/dist/target/Citizens-2.0.42-b4168.jar
+  # PlaceholderAPI - common placeholder bridge for dialogue and quest text
+  - https://github.com/PlaceholderAPI/PlaceholderAPI/releases/download/2.12.2/PlaceholderAPI-2.12.2.jar
+
+# Stage plugins safely by promoting only validated entries from pinned list.
+# Example:
+# minecraft_living_phase1_plugins_enabled:
+#   - https://ci.citizensnpcs.co/view/Citizens/job/Citizens2/lastSuccessfulBuild/artifact/dist/target/Citizens-2.0.42-b4168.jar
+minecraft_living_phase1_plugins_enabled:
+  # Citizens jar already present on disk - CI URL returns 404, omit to prevent crash-loop
+  - https://github.com/PlaceholderAPI/PlaceholderAPI/releases/download/2.12.2/PlaceholderAPI-2.12.2.jar
+  # Denizen jar already present on disk - CI URL returns 404, omit to prevent crash-loop
+  # LuckPerms - permission groups for command access control
+  - https://download.luckperms.net/1631/bukkit/loader/LuckPerms-Bukkit-5.5.42.jar
+
+# Quests content files are seeded separately into the plugin data directory.
+# Keep Quests 5.2.9 as the active quest runtime for compatibility with the
+# seeded Oakcross quest pack.
+
+# Final plugin set consumed by itzg/minecraft-server container env.
+# Keep media2 functionally clean while allowing newer clients to connect to the
+# pinned 1.21.4 server line used by media1.
+minecraft_paper_plugins:
+  - https://github.com/ViaVersion/ViaVersion/releases/download/5.9.0/ViaVersion-5.9.0.jar
+  - https://github.com/ViaVersion/ViaBackwards/releases/download/5.9.0/ViaBackwards-5.9.0.jar
+minecraft_modrinth_projects: []
+minecraft_quests_seed_enabled: false
+minecraft_phase1_apply: false
+
+# One-shot phase 2 rollout switch.
+# When true, deploy applies MVP quest subset and runs NPC bootstrap in mvp profile.
+minecraft_phase2_apply: false
+minecraft_phase2_mvp_quest_files:
+  - oakcross-bread-tavern.yml
+  - oakcross-east-road-patrol.yml
+  - oakcross-smith-needs-ore.yml
+  - oakcross-ruin-scout.yml
+
+# One-shot phase 3 rollout switch.
+# When true, deploy applies expansion quest set and runs NPC bootstrap in full profile.
+minecraft_phase3_apply: false
+minecraft_phase3_expansion_quest_files:
+  - oakcross-bread-tavern.yml
+  - oakcross-east-road-patrol.yml
+  - oakcross-missing-crate.yml
+  - oakcross-smith-needs-ore.yml
+  - oakcross-ruin-scout.yml
+
+# One-shot phase 4 rollout switch.
+# Applies dynamic dialogue/event profile command packs to the running server.
+minecraft_phase4_apply: false
+minecraft_dialogue_profile_apply: default
+minecraft_event_profile_apply: ""
+minecraft_season_profile_apply: ""
+minecraft_dialogue_schedule_enabled: false
+minecraft_dialogue_schedule_calendar: '*-*-* 09:00:00'
+minecraft_dialogue_schedule_default_profile: default
+minecraft_dialogue_weekday_profiles:
+  1: road-patrol
+  3: gathering-week
+  5: market-day
+  6: traveler-week
+minecraft_dialogue_season_month_map:
+  spring:
+    - 3
+    - 4
+    - 5
+  summer:
+    - 6
+    - 7
+    - 8
+  autumn:
+    - 9
+    - 10
+    - 11
+  winter:
+    - 12
+    - 1
+    - 2
+minecraft_reactive_npcs_enabled: false
+minecraft_reactive_npcs_apply: false
+
+# Safety guard for destructive NPC rebuild mode.
+# --remove-all is only enabled when BOTH flags are true.
+minecraft_npc_bootstrap_remove_all: false
+minecraft_npc_bootstrap_remove_all_confirm: false
+
+# Do not manage plugin-backed permissions on the clean target.
+minecraft_permissions_manage_enabled: false
+minecraft_permission_groups:
+  homes:
+    permissions:
+      - essentials.home
+      - essentials.sethome
+      - essentials.delhome
+      - essentials.sethome.multiple
+    users:
+      - Genderblender69
+      - Monstercraftguy
+
+minecraft_oakcross_palette:
+  kiosk_floor: oak_planks
+  kiosk_posts: oak_fence
+  kiosk_roof: spruce_slab
+  tavern_floor: cobblestone
+  tavern_frame: spruce_log
+  tavern_walls: oak_planks
+  tavern_roof: spruce_stairs
+  smithy_floor: cobblestone
+  smithy_walls: stone_bricks
+  smithy_roof: stone_brick_slab
+  guard_floor: cobblestone
+  guard_walls: oak_log
+  guard_roof: spruce_slab
+  stall_floor: oak_planks
+  stall_posts: oak_fence
+  stall_canopy: red_wool
+  scout_floor: cobblestone
+  scout_walls: spruce_log
+  scout_roof: spruce_stairs
+minecraft_disabled_plugins: []
+# NOTE: Optional plugins are currently disabled from auto-download because
+# api.modrinth.com timeouts were causing startup restart loops.
+# Add plugin jars manually to /srv/minecraft/data/plugins/, then restart.
+minecraft_difficulty: normal
+minecraft_game_mode: survival
+minecraft_level_name: sib_world
+minecraft_max_players: 20
+minecraft_use_aikar_flags: true
+minecraft_safe_mode: true
+minecraft_view_distance: 16
+minecraft_simulation_distance: 10
+minecraft_allow_flight: true
+minecraft_keep_inventory: true
+minecraft_spawn_protection: 0
+minecraft_os_upgrade: true
+minecraft_restart_for_updates: true
+# Preserve the known-good spawn coordinates on the clean sib_world target.
+# This does not overwrite player bed spawnpoints; beds remain per-player respawn anchors.
+minecraft_spawn_world: sib_world
+minecraft_spawn_dimension: minecraft:overworld
+minecraft_spawn_x: 1251
+minecraft_spawn_y: 63
+minecraft_spawn_z: -498
+minecraft_oakcross_buildings_y_offset: 1
+minecraft_bluemap_enabled: false
+minecraft_bluemap_port: 8100
+minecraft_bluemap_tailscale_only: true
+minecraft_coreprotect_check_updates: false
+minecraft_coreprotect_log_chat: false
+minecraft_coreprotect_log_commands: false
+minecraft_coreprotect_max_radius: 150
+minecraft_axgraves_despawn_seconds: 1800
+minecraft_axgraves_drop_items_on_expire: false
+minecraft_axgraves_interact_only_owner: true
+minecraft_axgraves_instant_pickup_only_owner: true
+minecraft_essentials_multiple_homes_default: 3
+minecraft_essentials_respawn_listener_priority: none
+minecraft_essentials_respawn_at_home: true
+minecraft_essentials_respawn_at_anchor: true
+minecraft_oneplayersleep_weather_clear: true
+minecraft_hub_import_enabled: false
+minecraft_hub_world_name: hub
+minecraft_hub_map_url: ""
+minecraft_hub_import_force: false
+minecraft_backup_enabled: true
+minecraft_restic_enabled: false
+minecraft_restic_repository: ""
+minecraft_restic_password: ""
+minecraft_restic_keep_daily: 7
+minecraft_restic_keep_weekly: 4
+minecraft_restic_keep_monthly: 6
+minecraft_backup_local_retention_days: 7
+minecraft_backup_schedule: '*-*-* 03:15:00'
+minecraft_playerstate_backup_enabled: true
+minecraft_playerstate_backup_schedule: '*-*-* *:00/15:00'
+minecraft_playerstate_backup_local_retention_days: 7
+minecraft_playerstate_predeploy_checkpoint_enabled: true
+minecraft_tailscale_enabled: true
+minecraft_tailscale_enable_ssh: true
+minecraft_tailscale_accept_routes: true
+minecraft_tailscale_tags: []
+# OPTION 3: Generate auth key at https://login.tailscale.com/admin/settings/keys
+# Then paste the "tskey-auth-..." value here for automated login
+minecraft_tailscale_auth_key: "{{ vault_media2_tailscale_auth_key | default('') }}"
+
+# ── Minecraft web admin panel (mcweb) ────────────────────────────────
+#
+# Access: http://<tailscale-ip>:8080  (only reachable over Tailscale)
+#
+# Secret key  — generate once: python3 -c "import secrets; print(secrets.token_hex(32))"
+# Password hash — generate once:
+#   python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
+#
+# Store both values in vault.yml (ansible-vault edit inventories/lab/vault.yml)
+mcweb_enabled: false
+mcweb_port: 8080
+# Bind IP is auto-detected from 'tailscale ip -4' at deploy time.
+# Only set mcweb_bind_ip here to override (e.g. force LAN binding).
+mcweb_bind_ip: 0.0.0.0
+mcweb_max_upload_mb: 64
+mcweb_secret_key: "{{ vault_mcweb_secret_key | default('') }}"
+mcweb_password_hash: "{{ vault_mcweb_password_hash | default('') }}"
+
+# ── Job scraper ──────────────────────────────────────────────────────
+#
+# Add webhook URL to vault:
+#   ansible-vault edit inventories/lab/vault.yml
+#   vault_job_scraper_discord_webhook: "https://discord.com/api/webhooks/<id>/<token>"
+#
+job_scraper_dir: /opt/job-scraper
+job_scraper_db_dir: /var/lib/job-scraper
+job_scraper_country: Netherlands
+job_scraper_location: "Netherlands"
+job_scraper_results_per_query: 15
+job_scraper_run_time: "*-*-* 08:00:00"
+job_scraper_discord_webhook_cloud:            "{{ vault_job_scraper_discord_webhook_cloud }}"
+job_scraper_discord_webhook_networking:       "{{ vault_job_scraper_discord_webhook_networking }}"
+job_scraper_discord_webhook_systems:          "{{ vault_job_scraper_discord_webhook_systems }}"
+job_scraper_discord_webhook_architecture:     "{{ vault_job_scraper_discord_webhook_architecture }}"
+job_scraper_discord_webhook_lead_engineering: "{{ vault_job_scraper_discord_webhook_lead_engineering }}"
+job_scraper_discord_webhook_devops:           "{{ vault_job_scraper_discord_webhook_devops }}"
+# Adzuna – get a free key at https://developer.adzuna.com
+# Add to vault: vault_job_scraper_adzuna_app_id / vault_job_scraper_adzuna_api_key
+job_scraper_adzuna_app_id:  "{{ vault_job_scraper_adzuna_app_id | default('') }}"
+job_scraper_adzuna_api_key: "{{ vault_job_scraper_adzuna_api_key | default('') }}"
+job_scraper_adzuna_country: "nl"

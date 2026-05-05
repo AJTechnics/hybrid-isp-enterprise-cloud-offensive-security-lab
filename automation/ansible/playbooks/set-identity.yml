@@ -16,6 +16,20 @@
         line: "127.0.1.1 {{ hostname }}"
         create: true
 
+    - name: Disable cloud-init network configuration
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          network: {config: disabled}
+
+    - name: Remove cloud-init DHCP netplan if present
+      ansible.builtin.file:
+        path: /etc/netplan/50-cloud-init.yaml
+        state: absent
+
     - name: Write netplan config
       ansible.builtin.copy:
         dest: /etc/netplan/01-ansible-static.yaml

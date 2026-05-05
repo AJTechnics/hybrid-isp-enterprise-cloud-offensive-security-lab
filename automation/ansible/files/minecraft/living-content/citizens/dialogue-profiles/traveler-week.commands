@@ -1,0 +1,4 @@
+# Weekly event: Traveler Week
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Traveler Week bulletin posted. Route reports are in demand.","color":"yellow"}]
+tellraw @a [{"text":"[Fen] ","color":"gold"},{"text":"Scout nearby landmarks and return safely to Oakcross.","color":"yellow"}]

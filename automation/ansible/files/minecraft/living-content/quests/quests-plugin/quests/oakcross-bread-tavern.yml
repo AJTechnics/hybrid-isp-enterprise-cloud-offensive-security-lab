@@ -1,0 +1,31 @@
+tasks:
+  bread_delivery:
+    type: "citizens_deliver"
+    npc-name: "Elira Thorn"
+    item: BREAD
+    amount: 16
+    remove-items-when-complete: true
+    accept-partial-completion: false
+    # For non-English characters, this file MUST stay encoded in UTF-8
+    quests:
+      oakcross-bread-tavern:
+        name: '&6Bread for the Tavern'
+        ask-message: '&7The tavern pantry is running low. Could you bring &f16 bread&7?'
+        finish-message: '&7Thank you! The tavern is stocked for tonight.'
+        npc-giver-uuid: 692541a6-2ce2-4552-8a13-151b5bf2d28b
+        redo-delay: 86400
+        stages:
+          ordered:
+            1:
+              items-to-deliver:
+                - ==: org.bukkit.inventory.ItemStack
+                  type: BREAD
+                  amount: 16
+              npc-delivery-uuids:
+                - 692541a6-2ce2-4552-8a13-151b5bf2d28b
+              delivery-messages:
+                - '&7Delivering to Elira... &f<amount> &7more needed.'
+        rewards:
+          money: 40
+          quest-points: 1
+  - " &8- &6You received 40 coins."

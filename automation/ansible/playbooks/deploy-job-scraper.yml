@@ -1,0 +1,104 @@
+---
+- name: Deploy job scraper
+  hosts: media1
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../inventories/lab/vault.yml
+
+  vars:
+    job_scraper_packages:
+      - python3
+      - python3-pip
+      - python3-venv
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+  tasks:
+    - name: Install required OS packages
+      ansible.builtin.apt:
+        name: "{{ job_scraper_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create job-scraper system user
+      ansible.builtin.user:
+        name: job-scraper
+        system: true
+        shell: /usr/sbin/nologin
+        home: "{{ job_scraper_dir }}"
+        create_home: false
+
+    - name: Create required directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ job_scraper_dir }}", owner: root, group: root, mode: "0755" }
+        - { path: "{{ job_scraper_db_dir }}", owner: job-scraper, group: job-scraper, mode: "0750" }
+        - { path: /etc/job-scraper, owner: root, group: job-scraper, mode: "0750" }
+
+    - name: Copy job_scraper.py
+      ansible.builtin.copy:
+        src: ../files/job_scraper.py
+        dest: "{{ job_scraper_dir }}/job_scraper.py"
+        owner: root
+        group: job-scraper
+        mode: "0750"
+      notify: Reload systemd
+
+    - name: Create Python virtual environment
+      ansible.builtin.command:
+        cmd: python3 -m venv {{ job_scraper_dir }}/venv
+        creates: "{{ job_scraper_dir }}/venv/bin/activate"
+
+    - name: Install Python requirements in venv
+      ansible.builtin.pip:
+        name:
+          - python-jobspy
+          - requests
+        virtualenv: "{{ job_scraper_dir }}/venv"
+        state: present
+
+    - name: Template env file
+      ansible.builtin.template:
+        src: ../templates/job_scraper.env.j2
+        dest: /etc/job-scraper/job_scraper.env
+        owner: root
+        group: job-scraper
+        mode: "0640"
+
+    - name: Template systemd service unit
+      ansible.builtin.template:
+        src: ../templates/job_scraper.service.j2
+        dest: /etc/systemd/system/job-scraper.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+    - name: Template systemd timer unit
+      ansible.builtin.template:
+        src: ../templates/job_scraper.timer.j2
+        dest: /etc/systemd/system/job-scraper.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+    - name: Flush handlers so systemd is reloaded before enabling the timer
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start job-scraper timer
+      ansible.builtin.systemd_service:
+        name: job-scraper.timer
+        enabled: true
+        state: started

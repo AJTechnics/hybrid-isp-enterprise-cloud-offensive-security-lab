@@ -1,0 +1,61 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  echo "usage: minecraft-backup-manual [--consistent|--live]" >&2
+}
+
+mode="consistent"
+if [ "$#" -gt 1 ]; then
+  usage
+  exit 64
+fi
+
+if [ "$#" -eq 1 ]; then
+  case "$1" in
+    --consistent)
+      mode="consistent"
+      ;;
+    --live)
+      mode="live"
+      ;;
+    *)
+      usage
+      exit 64
+      ;;
+  esac
+fi
+
+service="{{ minecraft_service_name }}.service"
+backup_dir="{{ minecraft_backup_dir }}"
+data_dir="{{ minecraft_data_dir }}"
+timestamp="$(date +%Y%m%d-%H%M%S)"
+archive="${backup_dir}/manual-${mode}-${timestamp}.tar.gz"
+
+mkdir -p "${backup_dir}"
+
+was_active=0
+service_stopped=0
+
+cleanup() {
+  if [ "${was_active}" -eq 1 ] && [ "${service_stopped}" -eq 1 ]; then
+    /usr/bin/systemctl start "${service}"
+  fi
+}
+
+trap cleanup EXIT INT TERM
+
+if [ "${mode}" = "consistent" ] && /usr/bin/systemctl is-active --quiet "${service}"; then
+  was_active=1
+  /usr/bin/systemctl stop "${service}"
+  service_stopped=1
+fi
+
+if [ "${mode}" = "live" ]; then
+  /usr/bin/tar --warning=no-file-changed -czf "${archive}" "${data_dir}"
+else
+  /usr/bin/tar -czf "${archive}" "${data_dir}"
+fi
+
+/usr/bin/sha256sum "${archive}"
+/usr/bin/ls -lh "${archive}"

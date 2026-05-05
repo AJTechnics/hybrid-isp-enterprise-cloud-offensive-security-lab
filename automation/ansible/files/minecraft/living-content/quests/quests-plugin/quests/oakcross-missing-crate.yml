@@ -1,0 +1,70 @@
+tasks:
+  search_route:
+    type: "walking"
+    distance: 220
+    worlds:
+      - "world_recovery"
+  return_crate:
+    type: "citizens_deliver"
+    npc-name: "Sella Reed"
+    item: BARREL
+    amount: 1
+    remove-items-when-complete: true
+    accept-partial-completion: false
+    worlds:
+      - "world_recovery"
+
+display:
+  name: "&6Missing Crate"
+  lore-normal:
+    - "&7Sella Reed is short one shipment."
+    - "&7Search the road and bring back"
+    - "&7a recovered crate."
+    - ""
+    - "&7Walk &f220 blocks &7and deliver &f1 barrel&7."
+    - ""
+    - "&7Reward: &680 coins"
+  lore-started:
+    - ""
+    - "&7Search run: &f{search_route:progress}&7/220 walked"
+    - "&7Crate returned: &f{return_crate:progress}&7/1"
+  type: "BARREL"
+
+startstring:
+  - " &8- &7Search the market road and return a crate to &6Sella Reed&7."
+
+rewardstring:
+  - " &8- &7The market ledger balances out for the week."
+  - " &8- &6You received 80 coins."
+
+vaultreward: 80
+
+placeholders:
+  description: "&7Recover a missing crate for &6Sella Reed&7."
+  progress: " &8- &f{return_crate:progress}&7/1 crate returned"
+
+progress-placeholders:
+  search_route: "&f{search_route:progress}&7/220 walked"
+  return_crate: "&f{return_crate:progress}&7/1 crate returned"
+# For non-English characters, this file MUST stay encoded in UTF-8
+quests:
+  oakcross-missing-crate:
+    name: '&6Missing Crate'
+    ask-message: '&7I am short one shipment this week. Find it and bring back a barrel.'
+    finish-message: '&7The market ledger balances again. Well done.'
+    npc-giver-uuid: 15368fa5-206c-4778-9253-72c21626a8dc
+    redo-delay: 604800
+    stages:
+      ordered:
+        1:
+          items-to-deliver:
+            - ==: org.bukkit.inventory.ItemStack
+              type: BARREL
+              amount: 1
+          npc-delivery-uuids:
+            - 15368fa5-206c-4778-9253-72c21626a8dc
+          delivery-messages:
+            - '&7Returning the crate to Sella...'
+    rewards:
+      money: 80
+      quest-points: 1

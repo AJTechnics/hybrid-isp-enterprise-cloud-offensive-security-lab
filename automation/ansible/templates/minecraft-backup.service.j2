@@ -1,0 +1,8 @@
+[Unit]
+Description=Encrypted backup of Minecraft data
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/minecraft-backup

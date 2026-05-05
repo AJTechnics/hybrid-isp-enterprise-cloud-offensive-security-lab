@@ -88,5 +88,26 @@ module "media1" {
   network_bridges = ["vmbr0"]
 }
 
+module "media2" {
+  source                      = "../../modules/proxmox-vm"
+  name                        = "media2"
+  vm_id                       = 109
+  node_name                   = "pve-node3"
+  template_vm_id              = 201
+  clone_node_name             = "pve-node2"
+  datastore_id                = "local-lvm"
+  cpu_cores                   = 4
+  memory_mb                   = 8192
+  disk_size_gb                = 100
+  network_bridges             = ["vmbr0"]
+  initialization_datastore_id = "local-lvm"
+  initialization_user         = "lab"
+  initialization_password     = var.media2_bootstrap_password
+  initialization_ssh_keys     = [trimspace(file("~/.ssh/id_ed25519.pub"))]
+  initialization_ipv4_address = "192.168.1.133/24"
+  initialization_ipv4_gateway = "192.168.1.1"
+  initialization_dns_servers  = ["192.168.1.1"]
+}
+
 
 

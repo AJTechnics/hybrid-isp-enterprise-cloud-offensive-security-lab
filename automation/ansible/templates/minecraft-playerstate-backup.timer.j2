@@ -1,0 +1,9 @@
+[Unit]
+Description=Minecraft player-state backup timer
+
+[Timer]
+OnCalendar={{ minecraft_playerstate_backup_schedule }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,3 @@
+# Season profile: Autumn (Harvestwake)
+
+tellraw @a [{"text":"[Maren] ","color":"gold"},{"text":"Harvestwake is underway. Crop turn-ins and feast prep are live.","color":"yellow"}]

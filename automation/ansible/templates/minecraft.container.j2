@@ -1,0 +1,22 @@
+[Unit]
+Description=Minecraft server container
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName={{ minecraft_service_name }}
+Image={{ minecraft_image }}
+EnvironmentFile=/etc/minecraft/minecraft.env
+PublishPort={{ minecraft_bind_ip }}:{{ minecraft_port }}:25565/tcp
+{% if minecraft_bluemap_enabled | default(false) %}
+PublishPort={{ minecraft_bluemap_bind_ip_resolved | default(minecraft_bind_ip) }}:{{ minecraft_bluemap_port | default(8100) }}:8100/tcp
+{% endif %}
+Volume={{ minecraft_data_dir }}:/data
+Pull=newer
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

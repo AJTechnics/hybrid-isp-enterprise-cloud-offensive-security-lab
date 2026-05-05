@@ -36,8 +36,8 @@ Proxmox Linux bridges will be used to create isolated lab segments. Each bridge 
 
 ## Phase 0 Hardware Tasks
 
-- [ ] Upgrade RAM to 32 GB
-- [ ] Confirm SSD capacity and install if needed
-- [ ] Install Proxmox VE
-- [ ] Configure initial bridges before deploying VMs
-- [ ] Document final bridge assignments here
+- [x] Upgrade RAM to 32 GB
+- [x] Confirm SSD capacity and install if needed
+- [x] Install Proxmox VE
+- [x] Configure initial bridges before deploying VMs
+- [x] Document final bridge assignments here

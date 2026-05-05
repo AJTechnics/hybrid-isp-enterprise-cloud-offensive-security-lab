@@ -1,0 +1,8 @@
+[Unit]
+Description=High-frequency Minecraft player-state backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/minecraft-playerstate-backup --live --label scheduled

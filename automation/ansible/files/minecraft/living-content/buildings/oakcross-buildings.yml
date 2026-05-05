@@ -1,0 +1,74 @@
+town:
+  name: Oakcross
+  anchor:
+    world: world_recovery
+    spawn_x: 1293
+    spawn_z: -455
+    placement_mode: relative_to_world_spawn
+  preserve_player_bed_spawns: true
+
+buildings:
+  - id: spawn_square_notice_board
+    owner_npc: Mira Vale
+    preferred_reuse: village_square
+    fallback_footprint: 5x5
+    relative_offset: "+2 east, +1 south"
+    required_props:
+      - bell
+      - barrels
+      - board_wall
+      - lanterns
+
+  - id: tavern_inn
+    owner_npc: Elira Thorn
+    preferred_reuse: largest_public_house_or_existing_tavern
+    fallback_footprint: 9x11
+    relative_offset: "-6 west, +4 south"
+    required_props:
+      - beds
+      - counter
+      - hearth
+      - storage
+
+  - id: smithy
+    owner_npc: Bram Coalhand
+    preferred_reuse: furnace_workshop_or_existing_smithy
+    fallback_footprint: 7x9
+    relative_offset: "+8 east, -5 north"
+    required_props:
+      - furnaces
+      - blast_furnace
+      - anvil
+      - barrels
+
+  - id: guard_post
+    owner_npc: Captain Rowan Pike
+    preferred_reuse: gatehouse_or_road_edge_building
+    fallback_footprint: 5x7
+    relative_offset: "+12 east, +10 south"
+    required_props:
+      - map_wall
+      - beds
+      - weapon_rack
+      - bell_or_banner
+
+  - id: market_stall
+    owner_npc: Sella Reed
+    preferred_reuse: existing_market_stall
+    fallback_footprint: 3x5
+    relative_offset: "-4 west, -3 north"
+    required_props:
+      - awning
+      - counter
+      - chest_or_barrel
+
+  - id: scout_hut
+    owner_npc: Old Fen Gray
+    preferred_reuse: edge_house_facing_route_or_forest
+    fallback_footprint: 5x7
+    relative_offset: "-12 west, +8 south"
+    required_props:
+      - cartography_table
+      - barrel
+      - lantern
+      - waypoint_board

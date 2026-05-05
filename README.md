@@ -82,6 +82,22 @@ The lab is built in layers rather than all at once.
 
 See [`homelab_lab_blueprint.md`](homelab_lab_blueprint.md) for the full project blueprint.
 
+For the world-preserving Paper Minecraft expansion plan, see [`docs/minecraft-living-paper-blueprint.md`](docs/minecraft-living-paper-blueprint.md).
+
+For Minecraft server operations (backup, restore, restart, replication, troubleshooting), see [`runbooks/minecraft-operations.md`](runbooks/minecraft-operations.md).
+
+Companion runbooks:
+- [`runbooks/minecraft-incident-response.md`](runbooks/minecraft-incident-response.md)
+- [`runbooks/minecraft-cutover-checklist.md`](runbooks/minecraft-cutover-checklist.md)
+
+Operational rollout cards and starter content skeletons:
+- [`docs/minecraft-living-rollout-checklist.md`](docs/minecraft-living-rollout-checklist.md)
+- [`docs/minecraft-spawn-town-pack.md`](docs/minecraft-spawn-town-pack.md)
+- [`automation/ansible/files/minecraft/living-content/citizens/oakcross-npcs.commands`](automation/ansible/files/minecraft/living-content/citizens/oakcross-npcs.commands)
+- [`automation/ansible/files/minecraft/living-content/buildings/oakcross-buildings.yml`](automation/ansible/files/minecraft/living-content/buildings/oakcross-buildings.yml)
+- [`automation/ansible/files/minecraft/living-content/quests/oakcross-quests.skeleton.yml`](automation/ansible/files/minecraft/living-content/quests/oakcross-quests.skeleton.yml)
+- [`automation/ansible/files/minecraft/living-content/quests/quests-plugin/categories.yml`](automation/ansible/files/minecraft/living-content/quests/quests-plugin/categories.yml)
+
 ## Repository Structure
 
 ```text

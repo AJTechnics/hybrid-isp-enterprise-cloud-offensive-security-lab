@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Applies a dialogue/event profile command pack for Oakcross.
+# Profile files are plain command lists stored at:
+#   /srv/minecraft/data/living-world/dialogue-profiles/<profile>.commands
+#
+# Lines starting with '#' and blank lines are ignored.
+
+usage() {
+  cat <<'USAGE'
+usage: minecraft-oakcross-dialogue-apply --profile <name>
+USAGE
+}
+
+profile=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile)
+      if [[ $# -lt 2 ]]; then
+        usage >&2
+        exit 64
+      fi
+      profile="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+
+if [[ -z "${profile}" ]]; then
+  usage >&2
+  exit 64
+fi
+
+profile_file="/srv/minecraft/data/living-world/dialogue-profiles/${profile}.commands"
+state_dir="/srv/minecraft/data/living-world/state"
+state_file="${state_dir}/active-dialogue-profile"
+
+normalize_flag_name() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr '-' '_'
+}
+
+rcon() {
+  local cmd="$1"
+  /usr/bin/podman exec -u 999 minecraft mc-send-to-console "$cmd"
+}
+
+denizen_available() {
+  local output
+  output="$(rcon "denizen version" 2>&1 || true)"
+  if printf '%s' "${output}" | grep -Eiq 'unknown command|unknown or incomplete command|no command|not a valid'; then
+    return 1
+  fi
+  return 0
+}
+
+denizen_flag() {
+  local script_line="$1"
+  rcon "ex ${script_line}" >/dev/null 2>&1 || true
+}
+
+ensure_running() {
+  if ! /usr/bin/systemctl is-active --quiet minecraft.service; then
+    echo "minecraft.service is not active" >&2
+    exit 1
+  fi
+
+  local attempts=30
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if /usr/bin/podman exec -u 999 minecraft mc-health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "minecraft server did not become ready in time" >&2
+  exit 1
+}
+
+if [[ ! -f "${profile_file}" ]]; then
+  echo "Dialogue profile not found: ${profile_file}" >&2
+  exit 1
+fi
+
+ensure_running
+
+mkdir -p "${state_dir}"
+
+echo "Applying Oakcross dialogue profile: ${profile}"
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "${line}" ]] && continue
+  [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+  rcon "${line}" || true
+  sleep 0.1
+done < "${profile_file}"
+
+printf '%s\n' "${profile}" > "${state_file}"
+
+if denizen_available; then
+  normalized_profile="$(normalize_flag_name "${profile}")"
+
+  for known_profile in default market-day road-patrol gathering-week traveler-week spring summer autumn winter; do
+    denizen_flag "flag server oakcross.profile.$(normalize_flag_name "${known_profile}"):!"
+  done
+
+  for known_season in spring summer autumn winter; do
+    denizen_flag "flag server oakcross.season.${known_season}:!"
+  done
+
+  denizen_flag "flag server oakcross.profile.active:${normalized_profile}"
+  denizen_flag "flag server oakcross.profile.${normalized_profile}"
+
+  case "${profile}" in
+    spring|summer|autumn|winter)
+      denizen_flag "flag server oakcross.season.${profile}"
+      ;;
+  esac
+fi
+
+echo "Oakcross dialogue profile apply complete: ${profile}"

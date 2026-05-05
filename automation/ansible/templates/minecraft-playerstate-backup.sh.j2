@@ -1,0 +1,123 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  echo "usage: minecraft-playerstate-backup [--consistent|--live] [--label <label>]" >&2
+}
+
+mode="live"
+label="scheduled"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --consistent)
+      mode="consistent"
+      shift
+      ;;
+    --live)
+      mode="live"
+      shift
+      ;;
+    --label)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 64
+      fi
+      label="$2"
+      shift 2
+      ;;
+    *)
+      usage
+      exit 64
+      ;;
+  esac
+done
+
+if [ ! -f /etc/minecraft/restic.env ]; then
+  echo "/etc/minecraft/restic.env is missing" >&2
+  exit 1
+fi
+
+. /etc/minecraft/restic.env
+
+service="{{ minecraft_service_name }}.service"
+container="{{ minecraft_service_name }}"
+data_dir="{{ minecraft_data_dir }}"
+backup_dir="{{ minecraft_backup_dir }}/playerstate"
+world_dir="${data_dir}/{{ minecraft_level_name | default('world') }}"
+timestamp="$(date +%Y%m%d-%H%M%S)"
+save_disabled=0
+service_stopped=0
+was_active=0
+mode_name="local"
+
+if [ "${RESTIC_ENABLED:-false}" = "true" ]; then
+  if [ -z "${RESTIC_REPOSITORY:-}" ] || [ -z "${RESTIC_PASSWORD:-}" ]; then
+    echo "RESTIC_REPOSITORY and RESTIC_PASSWORD must be configured when RESTIC_ENABLED=true." >&2
+    exit 1
+  fi
+
+  export RESTIC_REPOSITORY RESTIC_PASSWORD
+  mode_name="restic"
+fi
+
+rcon() {
+  /usr/bin/podman exec -u 999 "${container}" rcon-cli "$1"
+}
+
+cleanup() {
+  if [ "${service_stopped}" -eq 1 ] && [ "${was_active}" -eq 1 ]; then
+    /usr/bin/systemctl start "${service}"
+  fi
+
+  if [ "${save_disabled}" -eq 1 ]; then
+    rcon "save-on" >/dev/null 2>&1 || true
+    rcon "say Player-state backup window closed." >/dev/null 2>&1 || true
+  fi
+}
+
+trap cleanup EXIT INT TERM
+
+if /usr/bin/systemctl is-active --quiet "${service}"; then
+  was_active=1
+fi
+
+if [ "${mode}" = "consistent" ] && [ "${was_active}" -eq 1 ]; then
+  /usr/bin/systemctl stop "${service}"
+  service_stopped=1
+elif [ "${was_active}" -eq 1 ]; then
+  rcon "say Player-state backup starting; world saves paused briefly." >/dev/null 2>&1 || true
+  rcon "save-all flush" >/dev/null 2>&1 || true
+  rcon "save-off" >/dev/null 2>&1 || true
+  save_disabled=1
+fi
+
+set --
+for path in \
+  "${world_dir}/playerdata" \
+  "${world_dir}/advancements" \
+  "${world_dir}/stats" \
+  "${data_dir}/plugins/AxGraves/data.json" \
+  "${data_dir}/plugins/Essentials/userdata" \
+  "${data_dir}/usercache.json"
+do
+  if [ -e "${path}" ]; then
+    set -- "$@" "${path}"
+  fi
+done
+
+if [ "$#" -eq 0 ]; then
+  echo "No player-state paths were found to back up." >&2
+  exit 1
+fi
+
+if [ "${mode_name}" = "restic" ]; then
+  /usr/bin/restic backup "$@" --tag minecraft --tag playerstate --tag "${label}"
+else
+  /usr/bin/mkdir -p "${backup_dir}"
+  archive="${backup_dir}/playerstate-${label}-${timestamp}.tar.gz"
+  /usr/bin/tar --warning=no-file-changed -czf "${archive}" "$@"
+  /usr/bin/find "${backup_dir}" -maxdepth 1 -type f -name 'playerstate-*.tar.gz' -mtime +{{ (minecraft_playerstate_backup_local_retention_days | default(7) | int) - 1 }} -delete
+  /usr/bin/sha256sum "${archive}"
+  /usr/bin/ls -lh "${archive}"
+fi

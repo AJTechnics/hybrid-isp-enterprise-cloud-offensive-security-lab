@@ -1,0 +1,295 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Complete rebuild of Oakcross buildings - cleans everything and rebuilds from scratch.
+# This version:
+# 1. Completely wipes all old structures in a massive radius
+# 2. Rebuilds all 6 buildings with solid foundations
+# 3. Ensures no floating or stacked buildings
+
+DIMENSION="{{ minecraft_spawn_dimension | default('minecraft:overworld') }}"
+BASE_X="{{ minecraft_spawn_x | default(1251) }}"
+BASE_Y="{{ minecraft_spawn_y | default(63) }}"
+BASE_Z="{{ minecraft_spawn_z | default(-498) }}"
+
+# Block materials for each building
+KIOSK_FLOOR="{{ minecraft_oakcross_palette.kiosk_floor | default('oak_planks') }}"
+KIOSK_POSTS="{{ minecraft_oakcross_palette.kiosk_posts | default('oak_fence') }}"
+KIOSK_ROOF="{{ minecraft_oakcross_palette.kiosk_roof | default('spruce_slab') }}"
+
+TAVERN_FLOOR="{{ minecraft_oakcross_palette.tavern_floor | default('cobblestone') }}"
+TAVERN_FRAME="{{ minecraft_oakcross_palette.tavern_frame | default('spruce_log') }}"
+TAVERN_WALLS="{{ minecraft_oakcross_palette.tavern_walls | default('oak_planks') }}"
+TAVERN_ROOF="{{ minecraft_oakcross_palette.tavern_roof | default('spruce_stairs') }}"
+
+SMITHY_FLOOR="{{ minecraft_oakcross_palette.smithy_floor | default('cobblestone') }}"
+SMITHY_WALLS="{{ minecraft_oakcross_palette.smithy_walls | default('stone_bricks') }}"
+SMITHY_ROOF="{{ minecraft_oakcross_palette.smithy_roof | default('stone_brick_slab') }}"
+
+GUARD_FLOOR="{{ minecraft_oakcross_palette.guard_floor | default('cobblestone') }}"
+GUARD_WALLS="{{ minecraft_oakcross_palette.guard_walls | default('oak_log') }}"
+GUARD_ROOF="{{ minecraft_oakcross_palette.guard_roof | default('spruce_slab') }}"
+
+STALL_FLOOR="{{ minecraft_oakcross_palette.stall_floor | default('oak_planks') }}"
+STALL_POSTS="{{ minecraft_oakcross_palette.stall_posts | default('oak_fence') }}"
+STALL_CANOPY="{{ minecraft_oakcross_palette.stall_canopy | default('red_wool') }}"
+
+SCOUT_FLOOR="{{ minecraft_oakcross_palette.scout_floor | default('cobblestone') }}"
+SCOUT_WALLS="{{ minecraft_oakcross_palette.scout_walls | default('spruce_log') }}"
+SCOUT_ROOF="{{ minecraft_oakcross_palette.scout_roof | default('spruce_stairs') }}"
+
+send() {
+  local cmd="$1"
+  /usr/bin/podman exec -u 999 minecraft mc-send-to-console "$cmd"
+}
+
+wait_ready() {
+  if ! /usr/bin/systemctl is-active --quiet minecraft.service; then
+    echo "minecraft.service is not active" >&2
+    exit 1
+  fi
+
+  local attempts=30
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if /usr/bin/podman exec -u 999 minecraft mc-health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "minecraft server did not become ready in time" >&2
+  exit 1
+}
+
+announce() {
+  local speaker="$1"
+  local text="$2"
+  send "tellraw @a [{\"text\":\"[${speaker}] \",\"color\":\"gold\"},{\"text\":\"${text}\",\"color\":\"yellow\"}]"
+}
+
+wipe_box() {
+  local x="$1"
+  local z="$2"
+  local radius_x="$3"
+  local radius_z="$4"
+  send "execute in ${DIMENSION} run fill $((x - radius_x)) ${BASE_Y} $((z - radius_z)) $((x + radius_x)) 120 $((z + radius_z)) air"
+  send "execute in ${DIMENSION} run fill $((x - radius_x)) 121 $((z - radius_z)) $((x + radius_x)) 160 $((z + radius_z)) air"
+}
+
+repair_ground() {
+  local cx="$1"
+  local cz="$2"
+  # Refill accidental cleanup holes near the village footprint.
+  send "execute in ${DIMENSION} run fill $((cx - 30)) $((BASE_Y - 3)) $((cz - 30)) $((cx + 30)) $((BASE_Y - 1)) $((cz + 30)) dirt replace air"
+  send "execute in ${DIMENSION} run fill $((cx - 30)) ${BASE_Y} $((cz - 30)) $((cx + 30)) ${BASE_Y} $((cz + 30)) grass_block replace air"
+}
+
+wipe_village_layout() {
+  local base_x="$1"
+  local base_z="$2"
+
+  wipe_box "$((base_x + 0))" "$((base_z + 0))" 4 4
+  wipe_box "$((base_x - 18))" "$((base_z + 0))" 6 7
+  wipe_box "$((base_x + 18))" "$((base_z + 0))" 5 6
+  wipe_box "$((base_x + 0))" "$((base_z + 14))" 4 5
+  wipe_box "$((base_x - 18))" "$((base_z + 14))" 3 4
+  wipe_box "$((base_x + 18))" "$((base_z + 14))" 4 5
+}
+
+# Build kiosk (small structure)
+build_kiosk() {
+  local x=$((BASE_X))
+  local z=$((BASE_Z))
+  
+  announce "Mira Vale" "Building the notice board kiosk..."
+  
+  # Floor
+  send "execute in ${DIMENSION} run fill $((x - 2)) ${BASE_Y} $((z - 2)) $((x + 2)) ${BASE_Y} $((z + 2)) ${KIOSK_FLOOR}"
+  
+  # Posts
+  send "execute in ${DIMENSION} run setblock $((x - 2)) $((BASE_Y + 1)) $((z - 2)) ${KIOSK_POSTS}"
+  send "execute in ${DIMENSION} run setblock $((x + 2)) $((BASE_Y + 1)) $((z - 2)) ${KIOSK_POSTS}"
+  send "execute in ${DIMENSION} run setblock $((x - 2)) $((BASE_Y + 1)) $((z + 2)) ${KIOSK_POSTS}"
+  send "execute in ${DIMENSION} run setblock $((x + 2)) $((BASE_Y + 1)) $((z + 2)) ${KIOSK_POSTS}"
+  
+  # Roof
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 4)) $((z - 2)) $((x + 2)) $((BASE_Y + 4)) $((z + 2)) ${KIOSK_ROOF}"
+  
+  # Decorations
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) ${z} spruce_sign"
+  send "execute in ${DIMENSION} run setblock $((x + 1)) $((BASE_Y + 1)) ${z} barrel"
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) ${z} barrel"
+}
+
+# Build tavern (medium structure with interior)
+build_tavern() {
+  local x=$((BASE_X - 18))
+  local z=$((BASE_Z))
+  
+  announce "Elira Thorn" "Raising the tavern..."
+  
+  # Floor
+  send "execute in ${DIMENSION} run fill $((x - 4)) ${BASE_Y} $((z - 5)) $((x + 4)) ${BASE_Y} $((z + 5)) ${TAVERN_FLOOR}"
+  
+  # Walls - frame
+  send "execute in ${DIMENSION} run fill $((x - 4)) $((BASE_Y + 1)) $((z - 5)) $((x + 4)) $((BASE_Y + 4)) $((z + 5)) ${TAVERN_FRAME} hollow"
+  
+  # Walls - inner
+  send "execute in ${DIMENSION} run fill $((x - 3)) $((BASE_Y + 1)) $((z - 4)) $((x + 3)) $((BASE_Y + 3)) $((z + 4)) ${TAVERN_WALLS} hollow"
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 1)) $((z - 3)) $((x + 2)) $((BASE_Y + 3)) $((z + 3)) air"
+  
+  # Roof
+  send "execute in ${DIMENSION} run fill $((x - 4)) $((BASE_Y + 5)) $((z - 5)) $((x + 4)) $((BASE_Y + 5)) $((z + 5)) ${TAVERN_ROOF}"
+  
+  # Door
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) $((z - 5)) oak_door"
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 2)) $((z - 5)) oak_door[half=upper]"
+  
+  # Interior - beds
+  send "execute in ${DIMENSION} run setblock $((x - 2)) $((BASE_Y + 1)) $((z + 4)) red_bed"
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) $((z + 4)) red_bed"
+  send "execute in ${DIMENSION} run setblock $((x + 2)) $((BASE_Y + 1)) $((z + 4)) white_bed"
+  send "execute in ${DIMENSION} run setblock $((x + 3)) $((BASE_Y + 1)) $((z + 4)) white_bed"
+  
+  # Fireplace
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) $((z + 2)) campfire"
+}
+
+# Build smithy (compact forge building)
+build_smithy() {
+  local x=$((BASE_X + 18))
+  local z=$((BASE_Z))
+  
+  announce "Bram Coalhand" "Setting the smithy foundation..."
+  
+  # Floor
+  send "execute in ${DIMENSION} run fill $((x - 3)) ${BASE_Y} $((z - 4)) $((x + 3)) ${BASE_Y} $((z + 4)) ${SMITHY_FLOOR}"
+  
+  # Walls
+  send "execute in ${DIMENSION} run fill $((x - 3)) $((BASE_Y + 1)) $((z - 4)) $((x + 3)) $((BASE_Y + 3)) $((z + 4)) ${SMITHY_WALLS} hollow"
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 1)) $((z - 3)) $((x + 2)) $((BASE_Y + 3)) $((z + 3)) air"
+  
+  # Roof
+  send "execute in ${DIMENSION} run fill $((x - 3)) $((BASE_Y + 4)) $((z - 4)) $((x + 3)) $((BASE_Y + 4)) $((z + 4)) ${SMITHY_ROOF}"
+  
+  # Door
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) $((z - 4)) spruce_door"
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 2)) $((z - 4)) spruce_door[half=upper]"
+  
+  # Forges and tools
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) $((z + 1)) blast_furnace"
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) $((z + 1)) furnace"
+  send "execute in ${DIMENSION} run setblock $((x + 1)) $((BASE_Y + 1)) $((z + 1)) anvil"
+  send "execute in ${DIMENSION} run setblock $((x + 2)) $((BASE_Y + 1)) $((z + 1)) barrel"
+}
+
+# Build guard post (watch tower)
+build_guard_post() {
+  local x=$((BASE_X))
+  local z=$((BASE_Z + 14))
+  
+  announce "Captain Rowan Pike" "Constructing the guard post..."
+  
+  # Floor
+  send "execute in ${DIMENSION} run fill $((x - 2)) ${BASE_Y} $((z - 3)) $((x + 2)) ${BASE_Y} $((z + 3)) ${GUARD_FLOOR}"
+  
+  # Walls
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 1)) $((z - 3)) $((x + 2)) $((BASE_Y + 3)) $((z + 3)) ${GUARD_WALLS} hollow"
+  send "execute in ${DIMENSION} run fill $((x - 1)) $((BASE_Y + 1)) $((z - 2)) $((x + 1)) $((BASE_Y + 3)) $((z + 2)) air"
+  
+  # Roof
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 4)) $((z - 3)) $((x + 2)) $((BASE_Y + 4)) $((z + 3)) ${GUARD_ROOF}"
+  
+  # Door
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) $((z - 3)) oak_door"
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 2)) $((z - 3)) oak_door[half=upper]"
+  
+  # Interior
+  send "execute in ${DIMENSION} run setblock $((x + 1)) $((BASE_Y + 1)) $((z + 2)) cartography_table"
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) $((z + 2)) bell"
+}
+
+# Build market stall (open-air canopy)
+build_market_stall() {
+  local x=$((BASE_X - 18))
+  local z=$((BASE_Z + 14))
+  
+  announce "Sella Reed" "Raising the market stall canopy..."
+  
+  # Floor
+  send "execute in ${DIMENSION} run fill $((x - 1)) ${BASE_Y} $((z - 2)) $((x + 1)) ${BASE_Y} $((z + 2)) ${STALL_FLOOR}"
+  
+  # Posts
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) $((z - 2)) ${STALL_POSTS}"
+  send "execute in ${DIMENSION} run setblock $((x + 1)) $((BASE_Y + 1)) $((z - 2)) ${STALL_POSTS}"
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) $((z + 2)) ${STALL_POSTS}"
+  send "execute in ${DIMENSION} run setblock $((x + 1)) $((BASE_Y + 1)) $((z + 2)) ${STALL_POSTS}"
+  
+  # Canopy
+  send "execute in ${DIMENSION} run fill $((x - 1)) $((BASE_Y + 3)) $((z - 2)) $((x + 1)) $((BASE_Y + 3)) $((z + 2)) ${STALL_CANOPY}"
+  
+  # Counter
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) ${z} barrel"
+}
+
+# Build scout hut (ranger post)
+build_scout_hut() {
+  local x=$((BASE_X + 18))
+  local z=$((BASE_Z + 14))
+  
+  announce "Old Fen Gray" "Finishing the scout hut..."
+  
+  # Floor
+  send "execute in ${DIMENSION} run fill $((x - 2)) ${BASE_Y} $((z - 3)) $((x + 2)) ${BASE_Y} $((z + 3)) ${SCOUT_FLOOR}"
+  
+  # Walls
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 1)) $((z - 3)) $((x + 2)) $((BASE_Y + 3)) $((z + 3)) ${SCOUT_WALLS} hollow"
+  send "execute in ${DIMENSION} run fill $((x - 1)) $((BASE_Y + 1)) $((z - 2)) $((x + 1)) $((BASE_Y + 3)) $((z + 2)) air"
+  
+  # Roof
+  send "execute in ${DIMENSION} run fill $((x - 2)) $((BASE_Y + 4)) $((z - 3)) $((x + 2)) $((BASE_Y + 4)) $((z + 3)) ${SCOUT_ROOF}"
+  
+  # Door
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 1)) $((z - 3)) spruce_door"
+  send "execute in ${DIMENSION} run setblock ${x} $((BASE_Y + 2)) $((z - 3)) spruce_door[half=upper]"
+  
+  # Interior
+  send "execute in ${DIMENSION} run setblock $((x - 1)) $((BASE_Y + 1)) $((z + 2)) cartography_table"
+  send "execute in ${DIMENSION} run setblock $((x + 1)) $((BASE_Y + 1)) $((z + 2)) barrel"
+}
+
+# Main execution
+wait_ready
+
+# Step 1: Precisely remove all structure footprints at both the current and old build sites.
+announce "Mira Vale" "Demolishing all old structures..."
+send "execute in ${DIMENSION} run forceload add $((BASE_X - 30)) $((BASE_Z - 30)) $((BASE_X + 30)) $((BASE_Z + 30))"
+send "execute in ${DIMENSION} run forceload add $((1293 - 30)) $((-455 - 30)) $((1293 + 30)) $((-455 + 30))"
+wipe_village_layout "${BASE_X}" "${BASE_Z}"
+wipe_village_layout 1293 -455
+wipe_box 1294 -460 8 8
+sleep 2
+
+# Step 2: Build all structures fresh.
+announce "Mira Vale" "Constructing village structures..."
+repair_ground "${BASE_X}" "${BASE_Z}"
+build_kiosk
+sleep 1
+build_tavern
+sleep 1
+build_smithy
+sleep 1
+build_guard_post
+sleep 1
+build_market_stall
+sleep 1
+build_scout_hut
+sleep 1
+
+# Cleanup
+send "execute in ${DIMENSION} run forceload remove $((BASE_X - 30)) $((BASE_Z - 30)) $((BASE_X + 30)) $((BASE_Z + 30))"
+send "execute in ${DIMENSION} run forceload remove $((1293 - 30)) $((-455 - 30)) $((1293 + 30)) $((-455 + 30))"
+
+announce "Mira Vale" "The village of Oakcross stands complete!"
+echo "Oakcross building rebuild complete."

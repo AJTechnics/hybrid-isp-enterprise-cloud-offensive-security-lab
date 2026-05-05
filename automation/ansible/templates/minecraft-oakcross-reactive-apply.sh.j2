@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mapping_file="{{ minecraft_data_dir }}/living-world/state/oakcross-npcs.env"
+
+rcon() {
+  local cmd="$1"
+  /usr/bin/podman exec -u 999 minecraft mc-send-to-console "$cmd"
+}
+
+ensure_running() {
+  if ! /usr/bin/systemctl is-active --quiet minecraft.service; then
+    echo "minecraft.service is not active" >&2
+    exit 1
+  fi
+
+  local attempts=30
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if /usr/bin/podman exec -u 999 minecraft mc-health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "minecraft server did not become ready in time" >&2
+  exit 1
+}
+
+denizen_available() {
+  local output
+  output="$(rcon "denizen version" 2>&1 || true)"
+  if printf '%s' "${output}" | grep -Eiq 'unknown command|unknown or incomplete command|no command|not a valid'; then
+    return 1
+  fi
+  return 0
+}
+
+apply_assignment() {
+  local npc_id="$1"
+  local script_name="$2"
+
+  if [[ -z "${npc_id}" ]]; then
+    return 0
+  fi
+
+  rcon "ex assignment set script:${script_name} to:n@${npc_id}" >/dev/null 2>&1 || true
+}
+
+ensure_running
+
+if [[ ! -f "${mapping_file}" ]]; then
+  echo "Oakcross NPC ID map not found: ${mapping_file}" >&2
+  echo "Re-run the Oakcross NPC bootstrap once to regenerate the map, then retry." >&2
+  exit 1
+fi
+
+if ! denizen_available; then
+  echo "Denizen is not available on the running server" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+. "${mapping_file}"
+
+mapped_target_count=0
+for npc_id in \
+  "${OAKCROSS_NPC_MIRA_VALE:-}" \
+  "${OAKCROSS_NPC_ELIRA_THORN:-}" \
+  "${OAKCROSS_NPC_BRAM_COALHAND:-}" \
+  "${OAKCROSS_NPC_CAPTAIN_ROWAN_PIKE:-}" \
+  "${OAKCROSS_NPC_SELLA_REED:-}" \
+  "${OAKCROSS_NPC_OLD_FEN_GRAY:-}"; do
+  if [[ -n "${npc_id}" ]]; then
+    mapped_target_count=$((mapped_target_count + 1))
+  fi
+done
+
+if [[ "${mapped_target_count}" -eq 0 ]]; then
+  echo "Oakcross NPC ID map has no NPC IDs: ${mapping_file}" >&2
+  echo "Re-run Oakcross NPC bootstrap and retry reactive apply." >&2
+  exit 1
+fi
+
+rcon "denizen reload scripts" >/dev/null 2>&1 || true
+sleep 1
+
+apply_assignment "${OAKCROSS_NPC_MIRA_VALE:-}" "oakcross_mira_assignment"
+apply_assignment "${OAKCROSS_NPC_ELIRA_THORN:-}" "oakcross_elira_assignment"
+apply_assignment "${OAKCROSS_NPC_BRAM_COALHAND:-}" "oakcross_bram_assignment"
+apply_assignment "${OAKCROSS_NPC_CAPTAIN_ROWAN_PIKE:-}" "oakcross_rowan_assignment"
+apply_assignment "${OAKCROSS_NPC_SELLA_REED:-}" "oakcross_sella_assignment"
+apply_assignment "${OAKCROSS_NPC_OLD_FEN_GRAY:-}" "oakcross_fen_assignment"
+
+echo "Oakcross reactive NPC assignments applied from ${mapping_file}."

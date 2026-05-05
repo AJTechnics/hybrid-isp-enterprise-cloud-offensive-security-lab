@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_file="{{ minecraft_data_dir }}/living-world/state/active-dialogue-profile"
+default_profile="{{ minecraft_dialogue_schedule_default_profile | default('default') }}"
+
+choose_weekday_profile() {
+  local weekday="$1"
+  case "${weekday}" in
+    1) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['1'] | default('') }}" ;;
+    2) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['2'] | default('') }}" ;;
+    3) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['3'] | default('') }}" ;;
+    4) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['4'] | default('') }}" ;;
+    5) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['5'] | default('') }}" ;;
+    6) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['6'] | default('') }}" ;;
+    7) printf '%s\n' "{{ minecraft_dialogue_weekday_profiles['7'] | default('') }}" ;;
+    *) printf '\n' ;;
+  esac
+}
+
+choose_season_profile() {
+  local month="$1"
+  case "${month}" in
+{% for season_name, season_months in (minecraft_dialogue_season_month_map | default({})) | dictsort %}
+{%   for season_month in season_months %}
+    {{ season_month }}) printf '%s\n' "{{ season_name }}" ;;
+{%   endfor %}
+{% endfor %}
+    *) printf '\n' ;;
+  esac
+}
+
+current_profile=""
+if [[ -f "${state_file}" ]]; then
+  current_profile="$(tr -d '\r' < "${state_file}" | head -n 1)"
+fi
+
+weekday="$(date +%u)"
+month_raw="$(date +%m)"
+month="$((10#${month_raw}))"
+
+profile="$(choose_weekday_profile "${weekday}")"
+if [[ -z "${profile}" ]]; then
+  profile="$(choose_season_profile "${month}")"
+fi
+if [[ -z "${profile}" ]]; then
+  profile="${default_profile}"
+fi
+
+if [[ -n "${current_profile}" && "${current_profile}" == "${profile}" ]]; then
+  echo "Oakcross dialogue schedule: profile already active (${profile})"
+  exit 0
+fi
+
+exec /usr/local/bin/minecraft-oakcross-dialogue-apply --profile "${profile}"

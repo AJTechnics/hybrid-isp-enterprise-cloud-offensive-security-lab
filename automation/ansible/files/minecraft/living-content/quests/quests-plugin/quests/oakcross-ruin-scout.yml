@@ -1,0 +1,34 @@
+tasks:
+  scout_distance:
+    type: "walking"
+    distance: 600
+    worlds:
+      - "world_recovery"
+  ranger_report:
+    type: "citizens_interact"
+    npc-name: "Old Fen Gray"
+    worlds:
+      - "world_recovery"
+# For non-English characters, this file MUST stay encoded in UTF-8
+quests:
+  oakcross-ruin-scout:
+    name: '&6Scout the Old Ruin'
+    ask-message: '&7The ruin has been quiet. Too quiet. Clear out what lurks there.'
+    finish-message: '&7Your route report is logged. Stay sharp out there.'
+    npc-giver-uuid: 1d358c95-69af-4c84-a26d-89b35d35b985
+    redo-delay: 604800
+    stages:
+      ordered:
+        1:
+          mobs-to-kill:
+            - ZOMBIE
+            - SKELETON
+            - CREEPER
+          mob-amounts:
+            - 3
+            - 2
+            - 1
+    rewards:
+      money: 70
+      quest-points: 2
+

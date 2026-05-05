@@ -10,3 +10,9 @@ variable "proxmox_password" {
   type      = string
   sensitive = true
 }
+
+variable "media2_bootstrap_password" {
+  type      = string
+  sensitive = true
+  default   = null
+}

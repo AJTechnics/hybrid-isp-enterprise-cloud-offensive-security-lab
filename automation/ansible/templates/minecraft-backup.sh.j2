@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+if [ ! -f /etc/minecraft/restic.env ]; then
+  echo "/etc/minecraft/restic.env is missing" >&2
+  exit 1
+fi
+
+. /etc/minecraft/restic.env
+
+service="{{ minecraft_service_name }}.service"
+container="{{ minecraft_service_name }}"
+data_dir="{{ minecraft_data_dir }}"
+backup_dir="{{ minecraft_backup_dir }}"
+timestamp="$(date +%Y%m%d-%H%M%S)"
+mode="local"
+save_disabled=0
+
+if [ "${RESTIC_ENABLED:-false}" = "true" ]; then
+  if [ -z "${RESTIC_REPOSITORY:-}" ] || [ -z "${RESTIC_PASSWORD:-}" ]; then
+    echo "RESTIC_REPOSITORY and RESTIC_PASSWORD must be configured when RESTIC_ENABLED=true." >&2
+    exit 1
+  fi
+
+  export RESTIC_REPOSITORY RESTIC_PASSWORD
+  mode="restic"
+fi
+
+rcon() {
+  /usr/bin/podman exec -u 999 "${container}" rcon-cli "$1"
+}
+
+cleanup() {
+  if [ "${save_disabled}" -eq 1 ]; then
+    rcon "save-on" >/dev/null 2>&1 || true
+    rcon "say Backup window closed." >/dev/null 2>&1 || true
+  fi
+}
+
+trap cleanup EXIT INT TERM
+
+if /usr/bin/systemctl is-active --quiet "${service}"; then
+  rcon "say Nightly backup starting; world saves paused briefly." >/dev/null 2>&1 || true
+  rcon "save-all flush" >/dev/null 2>&1 || true
+  rcon "save-off" >/dev/null 2>&1 || true
+  save_disabled=1
+fi
+
+if [ "${mode}" = "restic" ]; then
+  /usr/bin/restic backup "${data_dir}" --tag minecraft --tag nightly
+  /usr/bin/restic forget --prune \
+    --keep-daily "${RESTIC_KEEP_DAILY}" \
+    --keep-weekly "${RESTIC_KEEP_WEEKLY}" \
+    --keep-monthly "${RESTIC_KEEP_MONTHLY}"
+else
+  /usr/bin/mkdir -p "${backup_dir}"
+  archive="${backup_dir}/nightly-live-${timestamp}.tar.gz"
+  /usr/bin/tar --warning=no-file-changed -czf "${archive}" "${data_dir}"
+  /usr/bin/find "${backup_dir}" -maxdepth 1 -type f -name 'nightly-live-*.tar.gz' -mtime +{{ (minecraft_backup_local_retention_days | default(14) | int) - 1 }} -delete
+  /usr/bin/sha256sum "${archive}"
+  /usr/bin/ls -lh "${archive}"
+fi

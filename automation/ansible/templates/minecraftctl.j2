@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: minecraftctl {start|stop|restart|status|logs|backup|manual-backup|manual-backup-live|playerstate-backup|playerstate-backup-live|oakcross-npcs|oakcross-buildings|oakcross-rebuild|oakcross-bootstrap|oakcross-dialogue-default|oakcross-dialogue-schedule|oakcross-reactive-apply}" >&2
+  exit 64
+fi
+
+case "$1" in
+  start|stop|restart|status)
+    exec /usr/bin/systemctl "$1" {{ minecraft_service_name }}.service
+    ;;
+  logs)
+    exec /usr/bin/journalctl -u {{ minecraft_service_name }}.service -n 200 --no-pager
+    ;;
+  backup)
+    exec /usr/bin/systemctl start minecraft-backup.service
+    ;;
+  manual-backup)
+    exec /usr/local/bin/minecraft-backup-manual --consistent
+    ;;
+  manual-backup-live)
+    exec /usr/local/bin/minecraft-backup-manual --live
+    ;;
+  playerstate-backup)
+    exec /usr/local/bin/minecraft-playerstate-backup --consistent --label manual
+    ;;
+  playerstate-backup-live)
+    exec /usr/local/bin/minecraft-playerstate-backup --live --label manual
+    ;;
+  oakcross-npcs)
+    exec /usr/local/bin/minecraft-oakcross-npcs
+    ;;
+  oakcross-buildings)
+    exec /usr/local/bin/minecraft-oakcross-buildings --wipe-first
+    ;;
+  oakcross-rebuild)
+    exec /usr/local/bin/minecraft-oakcross-buildings-rebuild
+    ;;
+  oakcross-bootstrap)
+    /usr/local/bin/minecraft-oakcross-buildings --wipe-first
+    exec /usr/local/bin/minecraft-oakcross-npcs
+    ;;
+  oakcross-dialogue-default)
+    exec /usr/local/bin/minecraft-oakcross-dialogue-apply --profile default
+    ;;
+  oakcross-dialogue-schedule)
+    exec /usr/local/bin/minecraft-oakcross-dialogue-schedule
+    ;;
+  oakcross-reactive-apply)
+    exec /usr/local/bin/minecraft-oakcross-reactive-apply
+    ;;
+  *)
+    echo "usage: minecraftctl {start|stop|restart|status|logs|backup|manual-backup|manual-backup-live|playerstate-backup|playerstate-backup-live|oakcross-npcs|oakcross-buildings|oakcross-rebuild|oakcross-bootstrap|oakcross-dialogue-default|oakcross-dialogue-schedule|oakcross-reactive-apply}" >&2
+    exit 64
+    ;;
+esac
