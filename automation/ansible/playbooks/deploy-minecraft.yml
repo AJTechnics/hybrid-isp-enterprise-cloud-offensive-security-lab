@@ -715,6 +715,12 @@
       register: minecraft_plugins_result
       changed_when: false
       failed_when: false
+      retries: 15
+      delay: 2
+      until: >-
+        (minecraft_plugins_result.rc | default(1)) == 0
+        and
+        ((((minecraft_plugins_result.stdout | default('')) ~ ' ' ~ (minecraft_plugins_result.stderr | default(''))) | trim) | length > 0)
       when:
         - (minecraft_permissions_manage_enabled | default(false) | bool)
           or (minecraft_reactive_npcs_enabled | default(false) | bool)
@@ -784,6 +790,20 @@
       when:
         - minecraft_permissions_manage_enabled | default(false) | bool
         - luckperms_available | default(false)
+
+    - name: Wait for BlueMap core config to exist
+      ansible.builtin.wait_for:
+        path: "{{ minecraft_data_dir }}/plugins/BlueMap/core.conf"
+        state: present
+        timeout: 120
+      when: minecraft_bluemap_enabled | default(false) | bool
+
+    - name: Wait for BlueMap webserver config to exist
+      ansible.builtin.wait_for:
+        path: "{{ minecraft_data_dir }}/plugins/BlueMap/webserver.conf"
+        state: present
+        timeout: 120
+      when: minecraft_bluemap_enabled | default(false) | bool
 
     - name: Accept BlueMap resource download terms
       ansible.builtin.lineinfile:

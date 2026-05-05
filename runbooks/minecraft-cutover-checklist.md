@@ -20,6 +20,9 @@ Use this when creating a clean server and importing only the canonical world dat
 4. Secrets prepared (tailscale, mcweb, other vault values).
 5. Maintenance window approved.
 6. Target world name decided before import, for example `sib_world`.
+7. Optional client-side mods communicated to players separately. Xaero's Minimap
+  is client-side only and is not deployed through the Paper server plugin or
+  mod automation in this repo.
 
 ## Phase 1: Build and Validate Target (No Traffic)
 
@@ -150,6 +153,14 @@ find /srv/minecraft/data/plugins -maxdepth 1 -type f -name '*.jar'
 # Confirm the imported world/player data exists under the new world name.
 find /srv/minecraft/data/sib_world -maxdepth 2 \( -name playerdata -o -name advancements -o -name stats \)
 ```
+
+Client mod note:
+
+- Xaero's Minimap should be installed by players in their own client mod loader.
+- Do not try to add Xaero's Minimap to a `minecraft_paper_plugins` list on
+  Paper hosts like `media2`; it is not a Bukkit/Paper plugin.
+- If a server-hosted map is needed, keep using a server-compatible option such
+  as BlueMap.
 
 ## Phase 6: Final Cutover (Low-Divergence)
 

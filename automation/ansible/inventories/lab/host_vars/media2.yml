@@ -84,11 +84,17 @@ minecraft_living_phase1_plugins_enabled:
 # seeded Oakcross quest pack.
 
 # Final plugin set consumed by itzg/minecraft-server container env.
-# Keep media2 functionally clean while allowing newer clients to connect to the
-# pinned 1.21.4 server line used by media1.
+# Keep media2 lean, but include the core command stack players expect from
+# media1: EssentialsX for /home, Vault as its economy bridge, LuckPerms for
+# explicit command grants, plus ViaVersion/ViaBackwards for protocol support.
 minecraft_paper_plugins:
+  - https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsX-2.21.2.jar
+  - https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar
+  - https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsXSpawn-2.21.2.jar
   - https://github.com/ViaVersion/ViaVersion/releases/download/5.9.0/ViaVersion-5.9.0.jar
   - https://github.com/ViaVersion/ViaBackwards/releases/download/5.9.0/ViaBackwards-5.9.0.jar
+  - https://cdn.modrinth.com/data/swbUV1cr/versions/nTnTxZjy/bluemap-5.16-spigot.jar
+  - https://download.luckperms.net/1631/bukkit/loader/LuckPerms-Bukkit-5.5.42.jar
 minecraft_modrinth_projects: []
 minecraft_quests_seed_enabled: false
 minecraft_phase1_apply: false
@@ -151,8 +157,8 @@ minecraft_reactive_npcs_apply: false
 minecraft_npc_bootstrap_remove_all: false
 minecraft_npc_bootstrap_remove_all_confirm: false
 
-# Do not manage plugin-backed permissions on the clean target.
-minecraft_permissions_manage_enabled: false
+# Manage the Essentials home commands explicitly for the core player set.
+minecraft_permissions_manage_enabled: true
 minecraft_permission_groups:
   homes:
     permissions:
@@ -209,7 +215,7 @@ minecraft_spawn_x: 1251
 minecraft_spawn_y: 63
 minecraft_spawn_z: -498
 minecraft_oakcross_buildings_y_offset: 1
-minecraft_bluemap_enabled: false
+minecraft_bluemap_enabled: true
 minecraft_bluemap_port: 8100
 minecraft_bluemap_tailscale_only: true
 minecraft_coreprotect_check_updates: false
