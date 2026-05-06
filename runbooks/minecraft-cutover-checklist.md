@@ -152,7 +152,24 @@ find /srv/minecraft/data/plugins -maxdepth 1 -type f -name '*.jar'
 
 # Confirm the imported world/player data exists under the new world name.
 find /srv/minecraft/data/sib_world -maxdepth 2 \( -name playerdata -o -name advancements -o -name stats \)
+
+# Confirm players keep inventory on death in every imported vanilla dimension.
+sudo podman exec -u 999 minecraft rcon-cli "mv gamerule list sib_world --filter keepInventory"
+sudo podman exec -u 999 minecraft rcon-cli "mv gamerule list sib_world_nether --filter keepInventory"
+sudo podman exec -u 999 minecraft rcon-cli "mv gamerule list sib_world_the_end --filter keepInventory"
 ```
+
+If any dimension reports `keepInventory = false`, reapply it before player
+testing:
+
+```bash
+sudo podman exec -u 999 minecraft rcon-cli "mv gamerule set keepInventory true sib_world"
+sudo podman exec -u 999 minecraft rcon-cli "mv gamerule set keepInventory true sib_world_nether"
+sudo podman exec -u 999 minecraft rcon-cli "mv gamerule set keepInventory true sib_world_the_end"
+```
+
+The Ansible deployment also reapplies this automatically when
+`minecraft_keep_inventory` is enabled for the host.
 
 Client mod note:
 

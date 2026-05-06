@@ -203,7 +203,6 @@ minecraft_safe_mode: true
 minecraft_view_distance: 16
 minecraft_simulation_distance: 10
 minecraft_allow_flight: true
-minecraft_keep_inventory: true
 minecraft_spawn_protection: 0
 minecraft_os_upgrade: true
 minecraft_restart_for_updates: true
